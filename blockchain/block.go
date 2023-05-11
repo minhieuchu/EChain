@@ -1,7 +1,7 @@
 package blockchain
 
 type Block struct {
-	Transactions []Transaction
+	Transactions []*Transaction
 	Timestamp    string
 	PrevHash     []byte
 	Hash         []byte

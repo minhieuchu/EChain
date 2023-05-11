@@ -1,5 +1,7 @@
 package blockchain
 
+import "crypto/sha256"
+
 type Transaction struct {
 	Hash    []byte
 	Inputs  []TxInput
@@ -15,4 +17,12 @@ type TxInput struct {
 type TxOutput struct {
 	Amount     int
 	LockScript string
+}
+
+func CoinBaseTransaction(toAddress string) *Transaction {
+	txOutput := TxOutput{COINBASE_REWARD, toAddress}
+	transaction := Transaction{[]byte{}, []TxInput{}, []TxOutput{txOutput}}
+	txHash := sha256.Sum256(Encode(transaction))
+	transaction.Hash = txHash[:]
+	return &transaction
 }
