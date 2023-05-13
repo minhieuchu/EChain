@@ -26,3 +26,11 @@ func CoinBaseTransaction(toAddress string) *Transaction {
 	transaction.Hash = txHash[:]
 	return &transaction
 }
+
+func (txInput *TxInput) IsSignedBy(address string) bool {
+	return txInput.UnlockScript == address
+}
+
+func (txOutput *TxOutput) CanBeUnlocked(address string) bool {
+	return txOutput.LockScript == address
+}
