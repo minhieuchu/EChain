@@ -3,6 +3,7 @@ package blockchain
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/gob"
 	"math/big"
 	"time"
 )
@@ -47,5 +48,13 @@ func Genesis(toAddress string) *Block {
 		PrevHash:     []byte{},
 	}
 	block.Mine()
+	return &block
+}
+
+func DecodeBlock(input []byte) *Block {
+	var block Block
+	byteBuffer := bytes.NewBuffer(input)
+	decoder := gob.NewDecoder(byteBuffer)
+	decoder.Decode(&block)
 	return &block
 }
