@@ -1,6 +1,9 @@
 package blockchain
 
-import "crypto/sha256"
+import (
+	"bytes"
+	"crypto/sha256"
+)
 
 type Transaction struct {
 	Hash    []byte
@@ -19,12 +22,26 @@ type TxOutput struct {
 	LockScript string
 }
 
+type surplusTxOutput struct {
+	TxOutput
+	TxHash      []byte
+	OutputIndex int
+}
+
 func CoinBaseTransaction(toAddress string) *Transaction {
 	txOutput := TxOutput{COINBASE_REWARD, toAddress}
-	transaction := Transaction{[]byte{}, []TxInput{}, []TxOutput{txOutput}}
-	txHash := sha256.Sum256(Encode(transaction))
-	transaction.Hash = txHash[:]
+	transaction := Transaction{
+		Inputs: []TxInput{},
+		Outputs: []TxOutput{txOutput},
+	}
+	transaction.SetHash()
 	return &transaction
+}
+
+func (transaction *Transaction) SetHash() {
+	encodedTransaction := bytes.Join([][]byte{Encode(transaction.Inputs), Encode(transaction.Outputs)}, []byte{})
+	txHash := sha256.Sum256(encodedTransaction)
+	transaction.Hash = txHash[:]
 }
 
 func (txInput *TxInput) IsSignedBy(address string) bool {
