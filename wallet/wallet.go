@@ -21,7 +21,7 @@ type Wallet struct {
 	PublickKey []byte
 }
 
-func CreateWallet() *Wallet {
+func createWallet() *Wallet {
 	curve := elliptic.P256()
 	privKey, err := ecdsa.GenerateKey(curve, rand.Reader)
 	HandleError(err)
