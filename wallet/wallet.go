@@ -1,6 +1,7 @@
 package wallet
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -40,14 +41,29 @@ func (wallet *Wallet) PubKeyHash() []byte {
 	return hasher.Sum(nil)
 }
 
-func (wallet *Wallet) Address() string {
-	pubkeyHash := wallet.PubKeyHash()
-	versionedHash := append([]byte{versionByte}, pubkeyHash...)
-	
+func getChecksum(versionedHash []byte) []byte {
 	firstHash := sha256.Sum256(versionedHash)
 	secondHash := sha256.Sum256(firstHash[:])
 	checksum := secondHash[:checksumLength]
+	return checksum
+}
 
-	encoded := base58.Encode(append(versionedHash, checksum...))
+func (wallet *Wallet) Address() string {
+	pubkeyHash := wallet.PubKeyHash()
+	versionedHash := append([]byte{versionByte}, pubkeyHash...)
+
+	encoded := base58.Encode(append(versionedHash, getChecksum(versionedHash)...))
 	return encoded
+}
+
+func IsAddressValid(address string) bool {
+	decoded := base58.Decode(address)
+	version := decoded[:1]
+	if !bytes.Equal(version, []byte{versionByte}) {
+		return false
+	}
+	payloadLastIndex := len(decoded) - checksumLength
+	payload := decoded[:payloadLastIndex]
+	checksum := decoded[payloadLastIndex:]
+	return bytes.Equal(getChecksum(payload), checksum)
 }
