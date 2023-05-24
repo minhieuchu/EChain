@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"crypto/ecdsa"
 	"errors"
 	"log"
 	"time"
@@ -61,18 +62,18 @@ func (blockchain *BlockChain) GetUnspentTransactionOutputs(address string) []sur
 
 		for _, transaction := range currentBlock.Transactions {
 			for outputIndex, txOutput := range transaction.Outputs {
-				if !slices.Contains(spentTxnOutputs[string(transaction.Hash)], outputIndex) && txOutput.CanBeUnlocked(address) {
+				if !slices.Contains(spentTxnOutputs[string(transaction.Hash)], outputIndex) && txOutput.IsBoundTo(address) {
 					surplusOutput := surplusTxOutput{
 						TxOutput:    txOutput,
-						TxHash:      transaction.Hash,
-						OutputIndex: outputIndex,
+						TxID:      transaction.Hash,
+						VOut: outputIndex,
 					}
 					unspentTransactionOutputs = append(unspentTransactionOutputs, surplusOutput)
 				}
 			}
 			for _, txInput := range transaction.Inputs {
 				if txInput.IsSignedBy(address) {
-					spentTxnOutputs[string(txInput.TxHash)] = append(spentTxnOutputs[string(txInput.TxHash)], txInput.OutputIndex)
+					spentTxnOutputs[string(txInput.TxID)] = append(spentTxnOutputs[string(txInput.TxID)], txInput.VOut)
 				}
 			}
 		}
@@ -96,7 +97,12 @@ func (blockchain *BlockChain) GetBalance(address string) int {
 	return balance
 }
 
-func (blockchain *BlockChain) Transfer(fromAddress, toAddress string, amount int) error {
+// Use both pubkey & fromAddress for validation of pubkey
+func (blockchain *BlockChain) Transfer(privKey ecdsa.PrivateKey, pubKey []byte, fromAddress, toAddress string, amount int) error {
+	if getAddressFromPubkey(pubKey) != fromAddress {
+		return errors.New("public key and sender address do not match")
+	}
+
 	transferAmount := 0
 	unspentTxnOutputs := blockchain.GetUnspentTransactionOutputs(fromAddress)
 	newTxnInputs := []TxInput{}
@@ -104,7 +110,7 @@ func (blockchain *BlockChain) Transfer(fromAddress, toAddress string, amount int
 
 	for _, txnOutput := range unspentTxnOutputs {
 		transferAmount += txnOutput.Amount
-		newTxnInputs = append(newTxnInputs, TxInput{txnOutput.TxHash, txnOutput.OutputIndex, fromAddress})
+		newTxnInputs = append(newTxnInputs, createTxnInput(txnOutput.TxID, txnOutput.VOut, pubKey))
 		if transferAmount >= amount {
 			break
 		}
@@ -114,9 +120,9 @@ func (blockchain *BlockChain) Transfer(fromAddress, toAddress string, amount int
 		return errors.New("not enough balance to transfer")
 	}
 
-	newTxnOutputs = append(newTxnOutputs, TxOutput{amount, toAddress})
+	newTxnOutputs = append(newTxnOutputs, createTxnOutput(amount, toAddress))
 	if transferAmount > amount {
-		newTxnOutputs = append(newTxnOutputs, TxOutput{transferAmount - amount, fromAddress})
+		newTxnOutputs = append(newTxnOutputs, createTxnOutput(transferAmount - amount, fromAddress))
 	}
 
 	newTransaction := Transaction{[]byte{}, newTxnInputs, newTxnOutputs}

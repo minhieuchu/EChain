@@ -11,27 +11,46 @@ type Transaction struct {
 	Outputs []TxOutput
 }
 
+type UnlockingScript struct {
+	Signature []byte
+	PubKey    []byte
+}
+
+type LockingScript struct {
+	PubKeyHash []byte
+}
+
 type TxInput struct {
-	TxHash       []byte
-	OutputIndex  int
-	UnlockScript string
+	TxID      []byte
+	VOut      int
+	ScriptSig UnlockingScript
 }
 
 type TxOutput struct {
-	Amount     int
-	LockScript string
+	Amount       int
+	ScriptPubKey LockingScript
 }
 
 type surplusTxOutput struct {
 	TxOutput
-	TxHash      []byte
-	OutputIndex int
+	TxID []byte
+	VOut int
+}
+
+func createTxnInput(txnID []byte, vOut int, pubkey []byte) TxInput {
+	unlockingScript := UnlockingScript{[]byte{}, pubkey}
+	return TxInput{txnID, vOut, unlockingScript}
+}
+
+func createTxnOutput(amount int, address string) TxOutput {
+	lockingScript := LockingScript{getPubkeyHashFromAddress(address)}
+	return TxOutput{amount, lockingScript}
 }
 
 func CoinBaseTransaction(toAddress string) *Transaction {
-	txOutput := TxOutput{COINBASE_REWARD, toAddress}
+	txOutput := createTxnOutput(COINBASE_REWARD, toAddress)
 	transaction := Transaction{
-		Inputs: []TxInput{},
+		Inputs:  []TxInput{},
 		Outputs: []TxOutput{txOutput},
 	}
 	transaction.SetHash()
@@ -45,9 +64,9 @@ func (transaction *Transaction) SetHash() {
 }
 
 func (txInput *TxInput) IsSignedBy(address string) bool {
-	return txInput.UnlockScript == address
+	return bytes.Equal(getPubkeyHashFromPubkey(txInput.ScriptSig.PubKey), getPubkeyHashFromAddress(address))
 }
 
-func (txOutput *TxOutput) CanBeUnlocked(address string) bool {
-	return txOutput.LockScript == address
+func (txOutput *TxOutput) IsBoundTo(address string) bool {
+	return bytes.Equal(txOutput.ScriptPubKey.PubKeyHash, getPubkeyHashFromAddress(address))
 }
