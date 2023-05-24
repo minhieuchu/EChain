@@ -2,6 +2,8 @@ package blockchain
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/rand"
 	"crypto/sha256"
 )
 
@@ -57,9 +59,19 @@ func CoinBaseTransaction(toAddress string) *Transaction {
 	return &transaction
 }
 
+func (transaction *Transaction) Sign(privKey ecdsa.PrivateKey) {
+	for inputIndex, txnInput := range transaction.Inputs {
+		inputHash := sha256.Sum256(Encode(txnInput))
+		r, s, err := ecdsa.Sign(rand.Reader, &privKey, inputHash[:])
+		HandleErr(err)
+		signature := append(r.Bytes(), s.Bytes()...)
+		transaction.Inputs[inputIndex].ScriptSig.Signature = signature
+	}
+}
+
 func (transaction *Transaction) SetHash() {
-	encodedTransaction := bytes.Join([][]byte{Encode(transaction.Inputs), Encode(transaction.Outputs)}, []byte{})
-	txHash := sha256.Sum256(encodedTransaction)
+	transaction.Hash = []byte{}
+	txHash := sha256.Sum256(Encode(transaction))
 	transaction.Hash = txHash[:]
 }
 

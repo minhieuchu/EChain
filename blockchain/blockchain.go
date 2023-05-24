@@ -126,6 +126,7 @@ func (blockchain *BlockChain) Transfer(privKey ecdsa.PrivateKey, pubKey []byte, 
 	}
 
 	newTransaction := Transaction{[]byte{}, newTxnInputs, newTxnOutputs}
+	newTransaction.Sign(privKey)
 	newTransaction.SetHash()
 	blockchain.AddBlock([]*Transaction{&newTransaction})
 
