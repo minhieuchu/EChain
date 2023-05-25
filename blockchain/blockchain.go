@@ -33,13 +33,53 @@ func InitBlockChain(firstAddress string) *BlockChain {
 	return &blockchain
 }
 
+func (chainIterator *BlockChainIterator) CurrentBlock() *Block {
+	encodedBlock, err := chainIterator.DataBase.Get(chainIterator.CurrentHash, nil)
+	HandleErr(err)
+	return DecodeBlock(encodedBlock)
+}
+
 func (blockchain *BlockChain) StoreNewBlock(block *Block) {
 	blockchain.LastHash = block.Hash
 	blockchain.DataBase.Put(block.Hash, Encode(block), nil)
 	blockchain.DataBase.Put([]byte(LAST_HASH_STOGAGE_KEY), block.Hash, nil)
 }
 
-func (blockchain *BlockChain) AddBlock(transactions []*Transaction) {
+func (blockchain *BlockChain) getTransactionMapFromInputs(transaction Transaction) map[string]Transaction {
+	txnIDs := map[string]bool{}
+	txnMap := map[string]Transaction{}
+
+	for _, txnInput := range transaction.Inputs {
+		txnIDs[string(txnInput.TxID)] = true
+	}
+
+	chainIterator := BlockChainIterator{blockchain.DataBase, blockchain.LastHash}
+	for {
+		currentBlock := chainIterator.CurrentBlock()
+
+		for _, transaction := range currentBlock.Transactions {
+			if _, exists := txnIDs[string(transaction.Hash)]; exists {
+				txnMap[string(transaction.Hash)] = *transaction
+				delete(txnIDs, string(transaction.Hash))
+			}
+		}
+
+		if len(currentBlock.PrevHash) == 0 {
+			break
+		}
+		chainIterator.CurrentHash = currentBlock.PrevHash
+	}
+
+	return txnMap
+}
+
+func (blockchain *BlockChain) AddBlock(transactions []*Transaction) error {
+	for _, transaction := range transactions {
+		txnMap := blockchain.getTransactionMapFromInputs(*transaction)
+		if !transaction.Verify(txnMap) {
+			return errors.New("invalid transaction")
+		}
+	}
 	newBlock := Block{
 		Transactions: transactions,
 		Timestamp:    time.Now().String(),
@@ -47,6 +87,7 @@ func (blockchain *BlockChain) AddBlock(transactions []*Transaction) {
 	}
 	newBlock.Mine()
 	blockchain.StoreNewBlock(&newBlock)
+	return nil
 }
 
 func (blockchain *BlockChain) GetUnspentTransactionOutputs(address string) []surplusTxOutput {
@@ -56,17 +97,15 @@ func (blockchain *BlockChain) GetUnspentTransactionOutputs(address string) []sur
 
 	// Scan through the blockchain starting from the most recent block
 	for {
-		encodedBlock, err := chainIterator.DataBase.Get(chainIterator.CurrentHash, nil)
-		HandleErr(err)
-		currentBlock := DecodeBlock(encodedBlock)
+		currentBlock := chainIterator.CurrentBlock()
 
 		for _, transaction := range currentBlock.Transactions {
 			for outputIndex, txOutput := range transaction.Outputs {
 				if !slices.Contains(spentTxnOutputs[string(transaction.Hash)], outputIndex) && txOutput.IsBoundTo(address) {
 					surplusOutput := surplusTxOutput{
-						TxOutput:    txOutput,
-						TxID:      transaction.Hash,
-						VOut: outputIndex,
+						TxOutput: txOutput,
+						TxID:     transaction.Hash,
+						VOut:     outputIndex,
 					}
 					unspentTransactionOutputs = append(unspentTransactionOutputs, surplusOutput)
 				}
@@ -122,13 +161,14 @@ func (blockchain *BlockChain) Transfer(privKey ecdsa.PrivateKey, pubKey []byte, 
 
 	newTxnOutputs = append(newTxnOutputs, createTxnOutput(amount, toAddress))
 	if transferAmount > amount {
-		newTxnOutputs = append(newTxnOutputs, createTxnOutput(transferAmount - amount, fromAddress))
+		newTxnOutputs = append(newTxnOutputs, createTxnOutput(transferAmount-amount, fromAddress))
 	}
 
 	newTransaction := Transaction{[]byte{}, newTxnInputs, newTxnOutputs}
 	newTransaction.Sign(privKey)
 	newTransaction.SetHash()
-	blockchain.AddBlock([]*Transaction{&newTransaction})
+	err := blockchain.AddBlock([]*Transaction{&newTransaction})
+	HandleErr(err)
 
 	return nil
 }

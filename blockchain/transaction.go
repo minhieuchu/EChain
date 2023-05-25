@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha256"
+	"math/big"
 )
 
 type Transaction struct {
@@ -49,6 +50,12 @@ func createTxnOutput(amount int, address string) TxOutput {
 	return TxOutput{amount, lockingScript}
 }
 
+func (txnInput TxInput) Hash() []byte {
+	txnInput.ScriptSig.Signature = []byte{}
+	hash := sha256.Sum256(Encode(txnInput))
+	return hash[:]
+}
+
 func CoinBaseTransaction(toAddress string) *Transaction {
 	txOutput := createTxnOutput(COINBASE_REWARD, toAddress)
 	transaction := Transaction{
@@ -61,12 +68,33 @@ func CoinBaseTransaction(toAddress string) *Transaction {
 
 func (transaction *Transaction) Sign(privKey ecdsa.PrivateKey) {
 	for inputIndex, txnInput := range transaction.Inputs {
-		inputHash := sha256.Sum256(Encode(txnInput))
-		r, s, err := ecdsa.Sign(rand.Reader, &privKey, inputHash[:])
+		inputHash := txnInput.Hash()
+		r, s, err := ecdsa.Sign(rand.Reader, &privKey, inputHash)
 		HandleErr(err)
 		signature := append(r.Bytes(), s.Bytes()...)
 		transaction.Inputs[inputIndex].ScriptSig.Signature = signature
 	}
+}
+
+func (transaction *Transaction) Verify(txnMap map[string]Transaction) bool {
+	for _, txnInput := range transaction.Inputs {
+		signature := txnInput.ScriptSig.Signature
+		pubkey := txnInput.ScriptSig.PubKey
+		referencedUTXO := txnMap[string(txnInput.TxID)].Outputs[txnInput.VOut]
+
+		if !bytes.Equal(getPubkeyHashFromPubkey(pubkey), referencedUTXO.ScriptPubKey.PubKeyHash) {
+			return false
+		}
+
+		signatureLength := len(signature)
+		r := new(big.Int).SetBytes(signature[:(signatureLength / 2)])
+		s := new(big.Int).SetBytes(signature[(signatureLength / 2):])
+		ecdsaPubkey := getECDSAPubkeyFromUncompressedPubkey(pubkey)
+		if !ecdsa.Verify(&ecdsaPubkey, txnInput.Hash(), r, s) {
+			return false
+		}
+	}
+	return true
 }
 
 func (transaction *Transaction) SetHash() {

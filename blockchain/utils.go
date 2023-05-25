@@ -2,6 +2,8 @@ package blockchain
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/sha256"
 	"encoding/gob"
 	"log"
@@ -16,7 +18,7 @@ const (
 	difficultyLevel       = 12  // bits
 	pubKeyChecksumLength  = 4
 	versionByte           = byte(0) // prefixed to pubkey hash when calculating address
-	COINBASE_REWARD       = 1000 // satoshi
+	COINBASE_REWARD       = 1000    // satoshi
 	LAST_HASH_STOGAGE_KEY = "LAST_HASH"
 )
 
@@ -27,6 +29,18 @@ func getPubkeyHashFromPubkey(pubkey []byte) []byte {
 	hasher := ripemd160.New()
 	hasher.Write(sha256Hash[:])
 	return hasher.Sum(nil)
+}
+
+func getECDSAPubkeyFromUncompressedPubkey(uncompressedPubKey []byte) ecdsa.PublicKey {
+	pubkeyCoordinates := uncompressedPubKey[1:] // remove the 1st byte prefix for uncompressed version
+	pubkeyLength := len(pubkeyCoordinates)
+	x := pubkeyCoordinates[:(pubkeyLength / 2)]
+	y := pubkeyCoordinates[(pubkeyLength / 2):]
+	bigIntX := new(big.Int).SetBytes(x)
+	bigIntY := new(big.Int).SetBytes(y)
+	curve := elliptic.P256()
+	ecdsaPubkey := ecdsa.PublicKey{curve, bigIntX, bigIntY}
+	return ecdsaPubkey
 }
 
 func getChecksum(versionedHash []byte) []byte {
