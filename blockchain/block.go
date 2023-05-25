@@ -40,8 +40,8 @@ func (block *Block) Mine() {
 	}
 }
 
-func Genesis(toAddress string) *Block {
-	coinbaseTransaction := CoinBaseTransaction(toAddress)
+func Genesis() *Block {
+	coinbaseTransaction := CoinBaseTransaction(NODE_ADDRESS)
 	block := Block{
 		Transactions: []*Transaction{coinbaseTransaction},
 		Timestamp:    time.Now().String(),

@@ -2,13 +2,13 @@ package main
 
 import (
 	"EChain/blockchain"
-
-	"github.com/google/uuid"
+	"EChain/wallet"
 )
 
-var myAddress = uuid.New().String()
-
 func main() {
-	chain := blockchain.InitBlockChain(myAddress)
+	wallets := wallet.LoadWallets()
+	nodeAddress := wallets.GetAddresses()[0]
+
+	chain := blockchain.InitBlockChain(nodeAddress)
 	defer chain.DataBase.Close()
 }
