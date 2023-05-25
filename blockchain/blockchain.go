@@ -172,7 +172,6 @@ func (blockchain *BlockChain) Transfer(privKey ecdsa.PrivateKey, pubKey []byte, 
 	newTransaction.Sign(privKey)
 	newTransaction.SetHash()
 	err := blockchain.AddBlock([]*Transaction{&newTransaction})
-	HandleErr(err)
 
-	return nil
+	return err
 }

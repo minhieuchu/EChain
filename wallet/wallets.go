@@ -1,6 +1,9 @@
 package wallet
 
 import (
+	"EChain/blockchain"
+
+	"crypto/elliptic"
 	"encoding/json"
 	"os"
 )
@@ -42,6 +45,10 @@ func LoadWallets() *Wallets {
 
 	wallets := make(map[string]Wallet)
 	json.Unmarshal(jsonStr, &wallets)
+	for key, wallet := range wallets {
+		wallet.PrivateKey.Curve = elliptic.P256()
+		wallets[key] = wallet
+	}
 
 	return &Wallets{wallets}
 }
@@ -50,4 +57,10 @@ func (wallets *Wallets) SaveFile() {
 	jsonStr, _ := json.Marshal(wallets.wallets)
 	err := os.WriteFile(walletFilePath, jsonStr, 0644)
 	HandleError(err)
+}
+
+func (wallets *Wallets) Transfer(fromAddress, toAddress string, amount int, chain *blockchain.BlockChain) error {
+	senderWallet := wallets.GetWallet(fromAddress)
+	err := chain.Transfer(senderWallet.PrivateKey, senderWallet.PublickKey, fromAddress, toAddress, amount)
+	return err
 }
