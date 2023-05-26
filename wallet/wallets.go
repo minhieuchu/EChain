@@ -11,7 +11,12 @@ import (
 const walletFilePath = "wallets.json"
 
 type Wallets struct {
-	wallets map[string]Wallet
+	connectedChain blockchain.BlockChain
+	wallets        map[string]Wallet
+}
+
+func (wallets *Wallets) ConnectChain(chain *blockchain.BlockChain) {
+	wallets.connectedChain = *chain
 }
 
 func (wallets *Wallets) GetWallet(address string) Wallet {
@@ -38,7 +43,9 @@ func LoadWallets() *Wallets {
 		f, _ := os.Create(walletFilePath)
 		defer f.Close()
 
-		return &Wallets{make(map[string]Wallet)}
+		newWallets := Wallets{}
+		newWallets.wallets = make(map[string]Wallet)
+		return &newWallets
 	}
 	jsonStr, err := os.ReadFile(walletFilePath)
 	HandleError(err)
@@ -50,7 +57,7 @@ func LoadWallets() *Wallets {
 		wallets[key] = wallet
 	}
 
-	return &Wallets{wallets}
+	return &Wallets{blockchain.BlockChain{}, wallets}
 }
 
 func (wallets *Wallets) SaveFile() {
@@ -59,8 +66,12 @@ func (wallets *Wallets) SaveFile() {
 	HandleError(err)
 }
 
-func (wallets *Wallets) Transfer(fromAddress, toAddress string, amount int, chain *blockchain.BlockChain) error {
+func (wallets *Wallets) Transfer(fromAddress, toAddress string, amount int) error {
 	senderWallet := wallets.GetWallet(fromAddress)
-	err := chain.Transfer(senderWallet.PrivateKey, senderWallet.PublickKey, fromAddress, toAddress, amount)
+	err := wallets.connectedChain.Transfer(senderWallet.PrivateKey, senderWallet.PublickKey, fromAddress, toAddress, amount)
 	return err
+}
+
+func (wallets *Wallets) GetBalance(address string) int {
+	return wallets.connectedChain.GetBalance(address)
 }

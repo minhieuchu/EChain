@@ -10,12 +10,14 @@ import (
 func main() {
 	wallets := wallet.LoadWallets()
 	addressList := wallets.GetAddresses()
-	nodeAddress := addressList[0] // miner node's address
+	nodeAddress := addressList[0] // miner node's wallet address
 	otherAddress := addressList[1]
 
 	chain := blockchain.InitBlockChain(nodeAddress)
 	defer chain.DataBase.Close()
 
-	wallets.Transfer(nodeAddress, otherAddress, 500, chain)
-	fmt.Println(chain.GetBalance(nodeAddress), chain.GetBalance(otherAddress))
+	wallets.ConnectChain(chain)
+
+	wallets.Transfer(nodeAddress, otherAddress, 500)
+	fmt.Println(wallets.GetBalance(nodeAddress), wallets.GetBalance(otherAddress))
 }
