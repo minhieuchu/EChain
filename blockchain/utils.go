@@ -50,12 +50,15 @@ func getChecksum(versionedHash []byte) []byte {
 	return checksum
 }
 
-func getAddressFromPubkey(pubkey []byte) string {
-	pubkeyHash := getPubkeyHashFromPubkey(pubkey)
+func getAddressFromPubkeyHash(pubkeyHash []byte) string {
 	versionedHash := append([]byte{versionByte}, pubkeyHash...)
-
 	encoded := base58.Encode(append(versionedHash, getChecksum(versionedHash)...))
 	return encoded
+}
+
+func getAddressFromPubkey(pubkey []byte) string {
+	pubkeyHash := getPubkeyHashFromPubkey(pubkey)
+	return getAddressFromPubkeyHash(pubkeyHash)
 }
 
 func getPubkeyHashFromAddress(address string) []byte {
