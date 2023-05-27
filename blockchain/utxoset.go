@@ -97,8 +97,46 @@ func (utxoSet *UTXOSet) Update(newBlock *Block) {
 	}
 }
 
-func (uxtoSet *UTXOSet) ReIndex() {
+func (utxoSet *UTXOSet) ReIndex() {
+	batch := new(leveldb.Batch)
+	iter := utxoSet.database.NewIterator(util.BytesPrefix(utxoPrefix), nil)
 
+	for iter.Next() {
+		utxoKey := iter.Key()
+		batch.Delete(utxoKey)
+	}
+	iter.Release()
+	err := utxoSet.database.Write(batch, nil)
+	HandleErr(err)
+
+	lastHash, _ := utxoSet.database.Get([]byte(LAST_HASH_STOGAGE_KEY), nil)
+	chainIterator := BlockChainIterator{utxoSet.database, lastHash}
+	spentTxnOutputs := make(map[string][]int)
+
+	for {
+		currentBlock := chainIterator.CurrentBlock()
+		for _, transaction := range currentBlock.Transactions {
+			for _, txnInput := range transaction.Inputs {
+				spentTxnOutputs[string(txnInput.TxID)] = append(spentTxnOutputs[string(txnInput.TxID)], txnInput.VOut)
+			}
+
+			var txnOutputs TxOutputs
+			for outputIndex, txnOutput := range transaction.Outputs {
+				if !slices.Contains(spentTxnOutputs[string(transaction.Hash)], outputIndex) {
+					txnOutputWithIndex := TxOutputWithIndex{txnOutput, outputIndex}
+					txnOutputs = append(txnOutputs, txnOutputWithIndex)
+				}
+			}
+
+			utxoSetTxnID := append(utxoPrefix, transaction.Hash...)
+			utxoSet.database.Put(utxoSetTxnID, Encode(txnOutputs), nil)
+		}
+
+		if len(currentBlock.PrevHash) == 0 {
+			break
+		}
+		chainIterator.CurrentHash = currentBlock.PrevHash
+	}
 }
 
 func DeserializeTxnOutputs(outputs []byte) TxOutputs {
