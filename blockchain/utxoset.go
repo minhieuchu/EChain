@@ -6,6 +6,7 @@ import (
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"golang.org/x/exp/slices"
 )
 
 type UTXOSet struct {
@@ -73,7 +74,27 @@ func (utxoSet *UTXOSet) FindUTXO(pubkeyHash []byte) map[string][]int {
 }
 
 func (utxoSet *UTXOSet) Update(newBlock *Block) {
+	spentTxnOutputs := make(map[string][]int)
+	for _, transaction := range newBlock.Transactions {
+		for _, txnInput := range transaction.Inputs {
+			spentTxnOutputs[string(txnInput.TxID)] = append(spentTxnOutputs[string(txnInput.TxID)], txnInput.VOut)
+		}
+	}
 
+	for txnID, spentTxnOutputIDs := range spentTxnOutputs {
+		utxoSetTxnID := append(utxoPrefix, []byte(txnID)...)
+		currentUTXOSet, _ := utxoSet.database.Get(utxoSetTxnID, nil)
+		currentUnspentTxOutputs := DeserializeTxnOutputs(currentUTXOSet)
+
+		var newTxOutputs TxOutputs
+		for _, unspentTxOutput := range currentUnspentTxOutputs {
+			if !slices.Contains(spentTxnOutputIDs, unspentTxOutput.Index) {
+				newTxOutputs = append(newTxOutputs, unspentTxOutput)
+			}
+		}
+
+		utxoSet.database.Put(utxoSetTxnID, Encode(newTxOutputs), nil)
+	}
 }
 
 func (uxtoSet *UTXOSet) ReIndex() {
