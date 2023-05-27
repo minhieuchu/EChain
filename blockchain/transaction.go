@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/gob"
 	"math/big"
 )
 
@@ -33,10 +32,6 @@ type TxInput struct {
 type TxOutput struct {
 	Amount       int
 	ScriptPubKey LockingScript
-}
-
-type TxnOutputs struct {
-	Outputs []TxOutput
 }
 
 type surplusTxOutput struct {
@@ -114,12 +109,4 @@ func (txInput *TxInput) IsSignedBy(address string) bool {
 
 func (txOutput *TxOutput) IsBoundTo(address string) bool {
 	return bytes.Equal(txOutput.ScriptPubKey.PubKeyHash, getPubkeyHashFromAddress(address))
-}
-
-func DeserializeTxnOutputs(outputs []byte) *TxnOutputs {
-	var txnOutputs TxnOutputs
-	byteBuffer := bytes.NewBuffer(outputs)
-	decoder := gob.NewDecoder(byteBuffer)
-	decoder.Decode(&txnOutputs)
-	return &txnOutputs
 }
