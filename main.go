@@ -22,6 +22,6 @@ func main() {
 
 	// ======= Testing =======
 
-	wallets.Transfer(nodeAddress, otherAddress, 500)
+	wallets.Transfer(otherAddress, 500)
 	fmt.Println(wallets.GetBalance(nodeAddress), wallets.GetBalance(otherAddress))
 }

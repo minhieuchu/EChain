@@ -116,12 +116,8 @@ func (blockchain *BlockChain) GetBalance(address string) int {
 	return balance
 }
 
-// Use both pubkey & fromAddress for validation of pubkey
-func (blockchain *BlockChain) Transfer(privKey ecdsa.PrivateKey, pubKey []byte, fromAddress, toAddress string, amount int) error {
-	if getAddressFromPubkey(pubKey) != fromAddress {
-		return errors.New("public key and sender address do not match")
-	}
-
+func (blockchain *BlockChain) Transfer(privKey ecdsa.PrivateKey, pubKey []byte, toAddress string, amount int) error {
+	fromAddress := getAddressFromPubkey(pubKey)
 	utxoSet := blockchain.UTXOSet()
 	transferAmount, unspentTxnOutputs := utxoSet.FindSpendableOutput(fromAddress, amount)
 	if transferAmount < amount {
