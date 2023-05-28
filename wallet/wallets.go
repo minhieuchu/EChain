@@ -48,7 +48,7 @@ func LoadWallets() *Wallets {
 		return &newWallets
 	}
 	jsonStr, err := os.ReadFile(walletFilePath)
-	HandleError(err)
+	handleError(err)
 
 	wallets := make(map[string]Wallet)
 	json.Unmarshal(jsonStr, &wallets)
@@ -63,7 +63,7 @@ func LoadWallets() *Wallets {
 func (wallets *Wallets) SaveFile() {
 	jsonStr, _ := json.Marshal(wallets.wallets)
 	err := os.WriteFile(walletFilePath, jsonStr, 0644)
-	HandleError(err)
+	handleError(err)
 }
 
 func (wallets *Wallets) Transfer(toAddress string, amount int) error {
