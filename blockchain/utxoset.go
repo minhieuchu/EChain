@@ -73,6 +73,7 @@ func (utxoSet *UTXOSet) FindUTXO(address string) map[string]TxOutputs {
 
 func (utxoSet *UTXOSet) Update(newBlock *Block) {
 	spentTxnOutputs := make(map[string][]int)
+	batch := new(leveldb.Batch)
 
 	for _, transaction := range newBlock.Transactions {
 		var txOutputs TxOutputs
@@ -85,7 +86,7 @@ func (utxoSet *UTXOSet) Update(newBlock *Block) {
 		}
 
 		utxoSetTxnID := append(utxoPrefix, transaction.Hash...)
-		utxoSet.database.Put(utxoSetTxnID, serialize(txOutputs), nil)
+		batch.Put(utxoSetTxnID, serialize(txOutputs))
 	}
 
 	for txnID, spentTxnOutputIDs := range spentTxnOutputs {
@@ -101,11 +102,12 @@ func (utxoSet *UTXOSet) Update(newBlock *Block) {
 		}
 
 		if len(newTxOutputs) > 0 {
-			utxoSet.database.Put(utxoSetTxnID, serialize(newTxOutputs), nil)
+			batch.Put(utxoSetTxnID, serialize(newTxOutputs))
 		} else {
-			utxoSet.database.Delete(utxoSetTxnID, nil)
+			batch.Delete(utxoSetTxnID)
 		}
 	}
+	utxoSet.database.Write(batch, nil)
 }
 
 func (utxoSet *UTXOSet) ReIndex() {
