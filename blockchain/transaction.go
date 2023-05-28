@@ -9,9 +9,10 @@ import (
 )
 
 type Transaction struct {
-	Hash    []byte
-	Inputs  []TxInput
-	Outputs []TxOutput
+	Hash     []byte
+	Inputs   []TxInput
+	Outputs  []TxOutput
+	Locktime int64
 }
 
 type UnlockingScript struct {
@@ -46,7 +47,7 @@ func createTxnOutput(amount int, address string) TxOutput {
 
 func (txnInput TxInput) Hash() []byte {
 	txnInput.ScriptSig.Signature = []byte{}
-	hash := sha256.Sum256(Encode(txnInput))
+	hash := sha256.Sum256(serialize(txnInput))
 	return hash[:]
 }
 
@@ -55,6 +56,7 @@ func CoinBaseTransaction(toAddress string) *Transaction {
 	transaction := Transaction{
 		Inputs:  []TxInput{},
 		Outputs: []TxOutput{txOutput},
+		Locktime: getCurrentTimeInMilliSec(),
 	}
 	transaction.SetHash()
 	return &transaction
@@ -64,7 +66,7 @@ func (transaction *Transaction) Sign(privKey ecdsa.PrivateKey) {
 	for inputIndex, txnInput := range transaction.Inputs {
 		inputHash := txnInput.Hash()
 		r, s, err := ecdsa.Sign(rand.Reader, &privKey, inputHash)
-		HandleErr(err)
+		handleErr(err)
 		signature := append(r.Bytes(), s.Bytes()...)
 		transaction.Inputs[inputIndex].ScriptSig.Signature = signature
 	}
@@ -93,7 +95,7 @@ func (transaction *Transaction) Verify(txnMap map[string]Transaction) bool {
 
 func (transaction *Transaction) SetHash() {
 	transaction.Hash = []byte{}
-	txHash := sha256.Sum256(Encode(transaction))
+	txHash := sha256.Sum256(serialize(transaction))
 	transaction.Hash = txHash[:]
 }
 

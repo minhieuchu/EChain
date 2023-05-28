@@ -40,7 +40,7 @@ func InitBlockChain(address string) *BlockChain {
 
 func (chainIterator *BlockChainIterator) CurrentBlock() *Block {
 	encodedBlock, err := chainIterator.DataBase.Get(chainIterator.CurrentHash, nil)
-	HandleErr(err)
+	handleErr(err)
 	return DeserializeBlock(encodedBlock)
 }
 
@@ -50,7 +50,7 @@ func (blockchain *BlockChain) UTXOSet() UTXOSet {
 
 func (blockchain *BlockChain) StoreNewBlock(block *Block) {
 	blockchain.LastHash = block.Hash
-	blockchain.DataBase.Put(block.Hash, Encode(block), nil)
+	blockchain.DataBase.Put(block.Hash, serialize(block), nil)
 	blockchain.DataBase.Put([]byte(LAST_HASH_STOGAGE_KEY), block.Hash, nil)
 
 	utxoSet := blockchain.UTXOSet()
@@ -138,7 +138,7 @@ func (blockchain *BlockChain) Transfer(privKey ecdsa.PrivateKey, pubKey []byte, 
 		newTxnOutputs = append(newTxnOutputs, createTxnOutput(transferAmount-amount, fromAddress))
 	}
 
-	newTransaction := Transaction{[]byte{}, newTxnInputs, newTxnOutputs}
+	newTransaction := Transaction{[]byte{}, newTxnInputs, newTxnOutputs, getCurrentTimeInMilliSec()}
 	newTransaction.Sign(privKey)
 	newTransaction.SetHash()
 	err := blockchain.AddBlock([]*Transaction{&newTransaction})

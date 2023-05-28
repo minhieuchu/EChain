@@ -85,7 +85,7 @@ func (utxoSet *UTXOSet) Update(newBlock *Block) {
 		}
 
 		utxoSetTxnID := append(utxoPrefix, transaction.Hash...)
-		utxoSet.database.Put(utxoSetTxnID, Encode(txOutputs), nil)
+		utxoSet.database.Put(utxoSetTxnID, serialize(txOutputs), nil)
 	}
 
 	for txnID, spentTxnOutputIDs := range spentTxnOutputs {
@@ -101,7 +101,7 @@ func (utxoSet *UTXOSet) Update(newBlock *Block) {
 		}
 
 		if len(newTxOutputs) > 0 {
-			utxoSet.database.Put(utxoSetTxnID, Encode(newTxOutputs), nil)
+			utxoSet.database.Put(utxoSetTxnID, serialize(newTxOutputs), nil)
 		} else {
 			utxoSet.database.Delete(utxoSetTxnID, nil)
 		}
@@ -119,7 +119,7 @@ func (utxoSet *UTXOSet) ReIndex() {
 	}
 	iter.Release()
 	err := utxoSet.database.Write(batch, nil)
-	HandleErr(err)
+	handleErr(err)
 
 	// ===== Traverse the blockchain to create new UTXO set
 	lastHash, _ := utxoSet.database.Get([]byte(LAST_HASH_STOGAGE_KEY), nil)
@@ -142,7 +142,7 @@ func (utxoSet *UTXOSet) ReIndex() {
 			}
 
 			utxoSetTxnID := append(utxoPrefix, transaction.Hash...)
-			utxoSet.database.Put(utxoSetTxnID, Encode(txnOutputs), nil)
+			utxoSet.database.Put(utxoSetTxnID, serialize(txnOutputs), nil)
 		}
 
 		if len(currentBlock.PrevHash) == 0 {

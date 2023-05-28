@@ -21,10 +21,10 @@ func (block *Block) Mine() {
 	for {
 		encodedBlock := bytes.Join(
 			[][]byte{
-				Encode(block.Transactions),
+				serialize(block.Transactions),
 				[]byte(block.Timestamp),
 				block.PrevHash,
-				Encode(nonce),
+				serialize(nonce),
 			},
 			[]byte{},
 		)

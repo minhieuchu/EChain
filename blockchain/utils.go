@@ -8,6 +8,7 @@ import (
 	"encoding/gob"
 	"log"
 	"math/big"
+	"time"
 
 	"github.com/btcsuite/btcutil/base58"
 	"golang.org/x/crypto/ripemd160"
@@ -66,14 +67,18 @@ func getPubkeyHashFromAddress(address string) []byte {
 	return decoded[1:(len(decoded) - pubKeyChecksumLength)] // Exclude the first byte - version byte
 }
 
-func Encode(value interface{}) []byte {
+func getCurrentTimeInMilliSec() int64 {
+	return time.Now().UnixMilli()
+}
+
+func serialize(value interface{}) []byte {
 	var byteBuffer bytes.Buffer
 	encoder := gob.NewEncoder(&byteBuffer)
 	encoder.Encode(value)
 	return byteBuffer.Bytes()
 }
 
-func HandleErr(err error) {
+func handleErr(err error) {
 	if err != nil {
 		log.Panic(err)
 	}
