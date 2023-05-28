@@ -3,7 +3,9 @@ package blockchain
 import (
 	"bytes"
 	"encoding/gob"
+	"fmt"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"golang.org/x/exp/slices"
@@ -71,10 +73,19 @@ func (utxoSet *UTXOSet) FindUTXO(address string) map[string]TxOutputs {
 
 func (utxoSet *UTXOSet) Update(newBlock *Block) {
 	spentTxnOutputs := make(map[string][]int)
+
 	for _, transaction := range newBlock.Transactions {
+		var txOutputs TxOutputs
 		for _, txnInput := range transaction.Inputs {
 			spentTxnOutputs[string(txnInput.TxID)] = append(spentTxnOutputs[string(txnInput.TxID)], txnInput.VOut)
 		}
+
+		for outputIndex, txOutput := range transaction.Outputs {
+			txOutputs = append(txOutputs, TxOutputWithIndex{txOutput, outputIndex})
+		}
+
+		utxoSetTxnID := append(utxoPrefix, transaction.Hash...)
+		utxoSet.database.Put(utxoSetTxnID, Encode(txOutputs), nil)
 	}
 
 	for txnID, spentTxnOutputIDs := range spentTxnOutputs {
@@ -89,7 +100,11 @@ func (utxoSet *UTXOSet) Update(newBlock *Block) {
 			}
 		}
 
-		utxoSet.database.Put(utxoSetTxnID, Encode(newTxOutputs), nil)
+		if len(newTxOutputs) > 0 {
+			utxoSet.database.Put(utxoSetTxnID, Encode(newTxOutputs), nil)
+		} else {
+			utxoSet.database.Delete(utxoSetTxnID, nil)
+		}
 	}
 }
 
@@ -143,4 +158,21 @@ func DeserializeTxnOutputs(outputs []byte) TxOutputs {
 	decoder := gob.NewDecoder(byteBuffer)
 	decoder.Decode(&txnOutputs)
 	return txnOutputs
+}
+
+func (utxoSet *UTXOSet) print() {
+	iter := utxoSet.database.NewIterator(util.BytesPrefix(utxoPrefix), nil)
+
+	fmt.Println("===== Start Logging UTXO Set =====")
+	for iter.Next() {
+		txnOutputs := DeserializeTxnOutputs(iter.Value())
+		fmt.Println("TxnID: ", iter.Key()[utxoPrefixLength:])
+		for _, output := range txnOutputs {
+			fmt.Println("UTXO: ")
+			spew.Dump(output)
+		}
+	}
+	fmt.Println("===== End Logging UTXO Set =====")
+	fmt.Println("")
+	iter.Release()
 }
