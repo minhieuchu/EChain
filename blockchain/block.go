@@ -51,7 +51,7 @@ func Genesis() *Block {
 	return &block
 }
 
-func DecodeBlock(input []byte) *Block {
+func DeserializeBlock(input []byte) *Block {
 	var block Block
 	byteBuffer := bytes.NewBuffer(input)
 	decoder := gob.NewDecoder(byteBuffer)

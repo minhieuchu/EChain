@@ -34,12 +34,6 @@ type TxOutput struct {
 	ScriptPubKey LockingScript
 }
 
-type surplusTxOutput struct {
-	TxOutput
-	TxID []byte
-	VOut int
-}
-
 func createTxnInput(txnID []byte, vOut int, pubkey []byte) TxInput {
 	unlockingScript := UnlockingScript{[]byte{}, pubkey}
 	return TxInput{txnID, vOut, unlockingScript}

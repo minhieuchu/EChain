@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/syndtr/goleveldb/leveldb"
-	"golang.org/x/exp/slices"
 )
 
 type BlockChain struct {
@@ -24,7 +23,7 @@ var NODE_ADDRESS string
 
 func InitBlockChain(address string) *BlockChain {
 	NODE_ADDRESS = address
-	db, err := leveldb.OpenFile("storage", nil) // Entrust the task of closing levelDB to the caller site
+	db, err := leveldb.OpenFile("storage", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -33,19 +32,29 @@ func InitBlockChain(address string) *BlockChain {
 	blockchain := BlockChain{db, genesisBlock.Hash}
 	blockchain.StoreNewBlock(genesisBlock)
 
+	utxoSet := blockchain.UTXOSet()
+	utxoSet.ReIndex()
+
 	return &blockchain
 }
 
 func (chainIterator *BlockChainIterator) CurrentBlock() *Block {
 	encodedBlock, err := chainIterator.DataBase.Get(chainIterator.CurrentHash, nil)
 	HandleErr(err)
-	return DecodeBlock(encodedBlock)
+	return DeserializeBlock(encodedBlock)
+}
+
+func (blockchain *BlockChain) UTXOSet() UTXOSet {
+	return UTXOSet{blockchain.DataBase}
 }
 
 func (blockchain *BlockChain) StoreNewBlock(block *Block) {
 	blockchain.LastHash = block.Hash
 	blockchain.DataBase.Put(block.Hash, Encode(block), nil)
 	blockchain.DataBase.Put([]byte(LAST_HASH_STOGAGE_KEY), block.Hash, nil)
+
+	utxoSet := blockchain.UTXOSet()
+	utxoSet.Update(block)
 }
 
 func (blockchain *BlockChain) getTransactionMapFromInputs(transaction Transaction) map[string]Transaction {
@@ -94,49 +103,16 @@ func (blockchain *BlockChain) AddBlock(transactions []*Transaction) error {
 	return nil
 }
 
-func (blockchain *BlockChain) GetUnspentTransactionOutputs(address string) []surplusTxOutput {
-	unspentTransactionOutputs := []surplusTxOutput{}
-	chainIterator := BlockChainIterator{blockchain.DataBase, blockchain.LastHash}
-	spentTxnOutputs := map[string][]int{} // Mapping between transaction hash and spent transaction output indexes
-
-	// Scan through the blockchain starting from the most recent block
-	for {
-		currentBlock := chainIterator.CurrentBlock()
-
-		for _, transaction := range currentBlock.Transactions {
-			for outputIndex, txOutput := range transaction.Outputs {
-				if !slices.Contains(spentTxnOutputs[string(transaction.Hash)], outputIndex) && txOutput.IsBoundTo(address) {
-					surplusOutput := surplusTxOutput{
-						TxOutput: txOutput,
-						TxID:     transaction.Hash,
-						VOut:     outputIndex,
-					}
-					unspentTransactionOutputs = append(unspentTransactionOutputs, surplusOutput)
-				}
-			}
-			for _, txInput := range transaction.Inputs {
-				if txInput.IsSignedBy(address) {
-					spentTxnOutputs[string(txInput.TxID)] = append(spentTxnOutputs[string(txInput.TxID)], txInput.VOut)
-				}
-			}
-		}
-
-		if len(currentBlock.PrevHash) == 0 {
-			break
-		}
-		chainIterator.CurrentHash = currentBlock.PrevHash
-	}
-	return unspentTransactionOutputs
-}
-
 func (blockchain *BlockChain) GetBalance(address string) int {
 	balance := 0
-	unspentTransactionOutputs := blockchain.GetUnspentTransactionOutputs(address)
+	utxoSet := blockchain.UTXOSet()
+	unspentTransactionOutputs := utxoSet.FindUTXO(address)
 
-	for _, txnOutput := range unspentTransactionOutputs {
-		balance += txnOutput.Amount
+	for _, txnOutputs := range unspentTransactionOutputs {
+		for _, output := range txnOutputs {
+			balance += output.Amount
+		}
 	}
-
 	return balance
 }
 
@@ -146,21 +122,19 @@ func (blockchain *BlockChain) Transfer(privKey ecdsa.PrivateKey, pubKey []byte, 
 		return errors.New("public key and sender address do not match")
 	}
 
-	transferAmount := 0
-	unspentTxnOutputs := blockchain.GetUnspentTransactionOutputs(fromAddress)
+	utxoSet := blockchain.UTXOSet()
+	transferAmount, unspentTxnOutputs := utxoSet.FindSpendableOutput(fromAddress, amount)
+	if transferAmount < amount {
+		return errors.New("not enough balance to transfer")
+	}
+
 	newTxnInputs := []TxInput{}
 	newTxnOutputs := []TxOutput{}
 
-	for _, txnOutput := range unspentTxnOutputs {
-		transferAmount += txnOutput.Amount
-		newTxnInputs = append(newTxnInputs, createTxnInput(txnOutput.TxID, txnOutput.VOut, pubKey))
-		if transferAmount >= amount {
-			break
+	for txnID, txnOutputs := range unspentTxnOutputs {
+		for _, output := range txnOutputs {
+			newTxnInputs = append(newTxnInputs, createTxnInput([]byte(txnID), output.Index, pubKey))
 		}
-	}
-
-	if transferAmount < amount {
-		return errors.New("not enough balance to transfer")
 	}
 
 	newTxnOutputs = append(newTxnOutputs, createTxnOutput(amount, toAddress))

@@ -25,11 +25,9 @@ var (
 	utxoPrefixLength = len(utxoPrefix)
 )
 
-func (utxoSet *UTXOSet) FindSpendableOutput(pubkeyHash []byte, amount int) (int, map[string][]int) {
+func (utxoSet *UTXOSet) FindSpendableOutput(address string, amount int) (int, map[string]TxOutputs) {
 	accumulatedAmount := 0
-	utxoMap := make(map[string][]int)
-
-	targetAddress := getAddressFromPubkeyHash(pubkeyHash)
+	utxoMap := make(map[string]TxOutputs)
 	iter := utxoSet.database.NewIterator(util.BytesPrefix(utxoPrefix), nil)
 
 OuterLoop:
@@ -38,9 +36,9 @@ OuterLoop:
 		txnOutputs := DeserializeTxnOutputs(iter.Value())
 
 		for _, txnOutput := range txnOutputs {
-			if txnOutput.IsBoundTo(targetAddress) {
+			if txnOutput.IsBoundTo(address) {
 				accumulatedAmount += txnOutput.Amount
-				utxoMap[string(txnID)] = append(utxoMap[string(txnID)], txnOutput.Index)
+				utxoMap[string(txnID)] = append(utxoMap[string(txnID)], txnOutput)
 			}
 			if accumulatedAmount >= amount {
 				break OuterLoop
@@ -52,10 +50,8 @@ OuterLoop:
 	return accumulatedAmount, utxoMap
 }
 
-func (utxoSet *UTXOSet) FindUTXO(pubkeyHash []byte) map[string][]int {
-	utxoMap := make(map[string][]int)
-
-	targetAddress := getAddressFromPubkeyHash(pubkeyHash)
+func (utxoSet *UTXOSet) FindUTXO(address string) map[string]TxOutputs {
+	utxoMap := make(map[string]TxOutputs)
 	iter := utxoSet.database.NewIterator(util.BytesPrefix(utxoPrefix), nil)
 
 	for iter.Next() {
@@ -63,8 +59,8 @@ func (utxoSet *UTXOSet) FindUTXO(pubkeyHash []byte) map[string][]int {
 		txnOutputs := DeserializeTxnOutputs(iter.Value())
 
 		for _, txnOutput := range txnOutputs {
-			if txnOutput.IsBoundTo(targetAddress) {
-				utxoMap[string(txnID)] = append(utxoMap[string(txnID)], txnOutput.Index)
+			if txnOutput.IsBoundTo(address) {
+				utxoMap[string(txnID)] = append(utxoMap[string(txnID)], txnOutput)
 			}
 		}
 	}
@@ -98,6 +94,7 @@ func (utxoSet *UTXOSet) Update(newBlock *Block) {
 }
 
 func (utxoSet *UTXOSet) ReIndex() {
+	// ===== Batch delete existing UTXO set =====
 	batch := new(leveldb.Batch)
 	iter := utxoSet.database.NewIterator(util.BytesPrefix(utxoPrefix), nil)
 
@@ -109,6 +106,7 @@ func (utxoSet *UTXOSet) ReIndex() {
 	err := utxoSet.database.Write(batch, nil)
 	HandleErr(err)
 
+	// ===== Traverse the blockchain to create new UTXO set
 	lastHash, _ := utxoSet.database.Get([]byte(LAST_HASH_STOGAGE_KEY), nil)
 	chainIterator := BlockChainIterator{utxoSet.database, lastHash}
 	spentTxnOutputs := make(map[string][]int)
