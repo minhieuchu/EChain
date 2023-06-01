@@ -22,7 +22,8 @@ func msgTypeToBytes(msgType string) []byte {
 }
 
 func getMsgType(msg []byte) string {
-	return string(msg[:msgTypeLength])
+	 trimmedMsg := bytes.Trim(msg[:msgTypeLength], "\x00")
+	 return string(trimmedMsg)
 }
 
 func serialize(value interface{}) []byte {

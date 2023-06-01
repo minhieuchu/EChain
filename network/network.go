@@ -58,11 +58,12 @@ func (node *p2pNode) handleConnection(conn net.Conn) {
 	handleError(err)
 
 	msgType := getMsgType(data)
+	payload := data[msgTypeLength:]
 	switch msgType {
 	case VERSION_MSG:
-		node.handleVersionMsg(data[msgTypeLength:])
+		node.handleVersionMsg(payload)
 	case VERACK_MSG:
-		node.handleVerackMsg(data[msgTypeLength:])
+		node.handleVerackMsg(payload)
 	default:
 		fmt.Println("invalid message")
 	}
