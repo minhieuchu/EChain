@@ -11,12 +11,18 @@ func main() {
 
 	wallets := wallet.LoadWallets()
 	addressList := wallets.GetAddresses()
-	nodeAddress := addressList[0] // miner node's wallet address
+	walletAddress := addressList[0] // miner node's wallet address
 
-	chain := blockchain.InitBlockChain(nodeAddress)
+	chain := blockchain.InitBlockChain(walletAddress)
 	defer chain.DataBase.Close()
 
 	// ======= Testing =======
 
-	network.StartBlockChainNode("localhost:8333", nodeAddress)
+	go func() {
+		network.StartBlockChainNode("localhost:8333")
+	}()
+	go func() {
+		network.StartBlockChainNode("localhost:8334")
+	}()
+	network.StartBlockChainNode("localhost:8335")
 }

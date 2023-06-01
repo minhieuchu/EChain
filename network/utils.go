@@ -4,7 +4,26 @@ import (
 	"bytes"
 	"encoding/gob"
 	"log"
+	"net"
 )
+
+func sendMessage(toAddress string, msg []byte) {
+	conn, err := net.Dial(protocol, toAddress)
+	handleError(err)
+	conn.Write(msg)
+}
+
+func msgTypeToBytes(msgType string) []byte {
+	var res [msgTypeLength]byte
+	for i := 0; i < len(msgType); i++ {
+		res[i] = msgType[i]
+	}
+	return res[:]
+}
+
+func getMsgType(msg []byte) string {
+	return string(msg[:msgTypeLength])
+}
 
 func serialize(value interface{}) []byte {
 	var byteBuffer bytes.Buffer

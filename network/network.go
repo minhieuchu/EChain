@@ -7,14 +7,12 @@ import (
 	"io"
 	"log"
 	"net"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 )
 
-var (
-	initialPeers   = []string{}
-	connectedPeers = []string{}
-)
+var initialPeers = []string{"localhost:8333", "localhost:8334", "localhost:8335"}
 
 const (
 	VERSION_MSG   = "version"
@@ -28,85 +26,76 @@ const (
 
 const (
 	protocol      = "tcp"
-	nVersion      = 1
 	msgTypeLength = 12 // First 12 bytes of each byte slice exchanged between peers are reserved for message type
 )
 
-type version_message struct {
+type versionMessage struct {
 	nVersion    int
 	addrYou     string
 	addrMe      string
 	nBestHeight int
 }
 
-var blockchainNode = struct {
-	nodeAddress   string
-	walletAddress string
-}{}
-
-func sendMessage(toAddress string, msg []byte) {
-	conn, err := net.Dial(protocol, toAddress)
-	handleError(err)
-	conn.Write(msg)
+type p2pNode struct {
+	nVersion       int
+	networkAddress string
+	connectedPeers []string
 }
 
-func msgTypeToBytes(msgType string) []byte {
-	var res [msgTypeLength]byte
-	for i := 0; i < len(msgType); i++ {
-		res[i] = msgType[i]
-	}
-	return res[:]
-}
-
-func getMsgType(msg []byte) string {
-	return string(msg[:msgTypeLength])
-}
-
-func handleVersionMsg(msg []byte) {
-	var versionMsg version_message
+func (node *p2pNode) handleVersionMsg(msg []byte) {
+	var versionMsg versionMessage
 	byteBuffer := bytes.NewBuffer(msg)
 	decoder := gob.NewDecoder(byteBuffer)
 	decoder.Decode(&versionMsg)
 	spew.Dump(versionMsg)
 }
 
-func handleVerackMsg(msg []byte) {
+func (node *p2pNode) handleVerackMsg(msg []byte) {
 }
 
-func handleConection(conn net.Conn) {
+func (node *p2pNode) handleConnection(conn net.Conn) {
 	data, err := io.ReadAll(conn)
 	handleError(err)
 
 	msgType := getMsgType(data)
 	switch msgType {
 	case VERSION_MSG:
-		handleVersionMsg(data[msgTypeLength:])
+		node.handleVersionMsg(data[msgTypeLength:])
 	case VERACK_MSG:
-		handleVerackMsg(data[msgTypeLength:])
+		node.handleVerackMsg(data[msgTypeLength:])
 	default:
-		fmt.Println("default")
+		fmt.Println("invalid message")
 	}
 }
 
-func sendVersionMsg(toAddress string) {
+func (node *p2pNode) sendVersionMsg(toAddress string) {
+	fmt.Println("Send Version msg from", node.networkAddress, "to", toAddress)
 	nBestHeight := 1
-	versionMsg := version_message{nVersion, toAddress, blockchainNode.nodeAddress, nBestHeight}
+	versionMsg := versionMessage{node.nVersion, toAddress, node.networkAddress, nBestHeight}
 	sentData := append(msgTypeToBytes(VERSION_MSG), serialize(versionMsg)...)
 	sendMessage(toAddress, sentData)
 }
 
-func StartBlockChainNode(nodeAddress, walletAddress string) {
-	blockchainNode.nodeAddress = nodeAddress
-	blockchainNode.walletAddress = walletAddress
+func StartBlockChainNode(networkAddress string) {
+	blockchainNode := p2pNode{
+		nVersion:       1,
+		networkAddress: networkAddress,
+	}
 
-	ln, err := net.Listen(protocol, nodeAddress)
+	fmt.Println("Starting blockchain node at", networkAddress)
+	ln, err := net.Listen(protocol, networkAddress)
 	if err != nil {
-		log.Fatal("can not start server at ", nodeAddress)
+		log.Fatal("can not start server at ", networkAddress)
 	}
 
-	for _, peer := range initialPeers {
-		sendVersionMsg(peer)
-	}
+	go func() {
+		time.Sleep(2 * time.Second)
+		for _, peerAddr := range initialPeers {
+			if peerAddr != blockchainNode.networkAddress {
+				blockchainNode.sendVersionMsg(peerAddr)
+			}
+		}
+	}()
 
 	for {
 		conn, err := ln.Accept()
@@ -114,6 +103,6 @@ func StartBlockChainNode(nodeAddress, walletAddress string) {
 			log.Panic(err.Error())
 		}
 
-		go handleConection(conn)
+		go blockchainNode.handleConnection(conn)
 	}
 }
