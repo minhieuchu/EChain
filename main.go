@@ -8,6 +8,8 @@ import (
 	"sync"
 )
 
+const NETWORK_NODES_NUM = 3
+
 func main() {
 	// ======= Init =======
 
@@ -21,7 +23,7 @@ func main() {
 	// ======= Testing =======
 
 	var wg sync.WaitGroup
-	for i := 0; i < 3; i++ {
+	for i := 0; i < NETWORK_NODES_NUM; i++ {
 		wg.Add(1)
 		portNumber := 8333 + i
 		go func() {

@@ -8,6 +8,8 @@ import (
 	"log"
 	"net"
 	"time"
+
+	"golang.org/x/exp/slices"
 )
 
 var initialPeers = []string{"127.0.0.1:8333", "127.0.0.1:8334", "127.0.0.1:8335"}
@@ -40,6 +42,9 @@ func (node *p2pNode) handleVersionMsg(msg []byte) {
 	decoder.Decode(&versionMsg)
 	if node.nVersion == versionMsg.Version {
 		node.sendVerackMsg(versionMsg.AddrMe)
+		if !slices.Contains(node.connectedPeers, versionMsg.AddrMe) {
+			node.sendVersionMsg(versionMsg.AddrMe)
+		}
 	}
 }
 
@@ -78,6 +83,7 @@ func (node *p2pNode) sendVersionMsg(toAddress string) {
 }
 
 func (node *p2pNode) sendVerackMsg(toAddress string) {
+	fmt.Println("Send Verack msg from", node.networkAddress, "to", toAddress)
 	verackMsg := verackMessage{node.networkAddress}
 	sentData := append(msgTypeToBytes(VERACK_MSG), serialize(verackMsg)...)
 	sendMessage(toAddress, sentData)
