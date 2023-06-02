@@ -8,11 +8,9 @@ import (
 	"log"
 	"net"
 	"time"
-
-	"github.com/davecgh/go-spew/spew"
 )
 
-var initialPeers = []string{"localhost:8333", "localhost:8334", "localhost:8335"}
+var initialPeers = []string{"127.0.0.1:8333", "127.0.0.1:8334", "127.0.0.1:8335"}
 
 const (
 	VERSION_MSG   = "version"
@@ -29,13 +27,6 @@ const (
 	msgTypeLength = 12 // First 12 bytes of each byte slice exchanged between peers are reserved for message type
 )
 
-type versionMessage struct {
-	nVersion    int
-	addrYou     string
-	addrMe      string
-	nBestHeight int
-}
-
 type p2pNode struct {
 	nVersion       int
 	networkAddress string
@@ -47,10 +38,18 @@ func (node *p2pNode) handleVersionMsg(msg []byte) {
 	byteBuffer := bytes.NewBuffer(msg)
 	decoder := gob.NewDecoder(byteBuffer)
 	decoder.Decode(&versionMsg)
-	spew.Dump(versionMsg)
+	if node.nVersion == versionMsg.Version {
+		node.sendVerackMsg(versionMsg.AddrMe)
+	}
 }
 
 func (node *p2pNode) handleVerackMsg(msg []byte) {
+	var verackMsg verackMessage
+	byteBuffer := bytes.NewBuffer(msg)
+	decoder := gob.NewDecoder(byteBuffer)
+	decoder.Decode(&verackMsg)
+	node.connectedPeers = append(node.connectedPeers, verackMsg.AddrFrom)
+	// Todo: Send addr message
 }
 
 func (node *p2pNode) handleConnection(conn net.Conn) {
@@ -75,6 +74,12 @@ func (node *p2pNode) sendVersionMsg(toAddress string) {
 	nBestHeight := 1
 	versionMsg := versionMessage{node.nVersion, toAddress, node.networkAddress, nBestHeight}
 	sentData := append(msgTypeToBytes(VERSION_MSG), serialize(versionMsg)...)
+	sendMessage(toAddress, sentData)
+}
+
+func (node *p2pNode) sendVerackMsg(toAddress string) {
+	verackMsg := verackMessage{node.networkAddress}
+	sentData := append(msgTypeToBytes(VERACK_MSG), serialize(verackMsg)...)
 	sendMessage(toAddress, sentData)
 }
 
