@@ -11,6 +11,8 @@ func sendMessage(toAddress string, msg []byte) {
 	conn, err := net.Dial(protocol, toAddress)
 	handleError(err)
 	conn.Write(msg)
+	conn.(*net.TCPConn).CloseWrite()
+	conn.Close()
 }
 
 func msgTypeToBytes(msgType string) []byte {
@@ -22,8 +24,8 @@ func msgTypeToBytes(msgType string) []byte {
 }
 
 func getMsgType(msg []byte) string {
-	 trimmedMsg := bytes.Trim(msg[:msgTypeLength], "\x00")
-	 return string(trimmedMsg)
+	trimmedMsg := bytes.Trim(msg[:msgTypeLength], "\x00")
+	return string(trimmedMsg)
 }
 
 func serialize(value interface{}) []byte {

@@ -55,6 +55,7 @@ func (node *p2pNode) handleVerackMsg(msg []byte) {
 
 func (node *p2pNode) handleConnection(conn net.Conn) {
 	data, err := io.ReadAll(conn)
+	defer conn.Close()
 	handleError(err)
 
 	msgType := getMsgType(data)
@@ -86,7 +87,7 @@ func StartBlockChainNode(networkAddress string) {
 	fmt.Println("Starting blockchain node at", networkAddress)
 	ln, err := net.Listen(protocol, networkAddress)
 	if err != nil {
-		log.Fatal("can not start server at ", networkAddress)
+		log.Fatal("can not start server at", networkAddress)
 	}
 
 	go func() {

@@ -4,6 +4,8 @@ import (
 	"EChain/blockchain"
 	"EChain/network"
 	"EChain/wallet"
+	"fmt"
+	"sync"
 )
 
 func main() {
@@ -18,11 +20,14 @@ func main() {
 
 	// ======= Testing =======
 
-	go func() {
-		network.StartBlockChainNode("localhost:8333")
-	}()
-	go func() {
-		network.StartBlockChainNode("localhost:8334")
-	}()
-	network.StartBlockChainNode("localhost:8335")
+	var wg sync.WaitGroup
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		portNumber := 8333 + i
+		go func() {
+			defer wg.Done()
+			network.StartBlockChainNode("localhost:" + fmt.Sprint(portNumber))
+		}()
+	}
+	wg.Wait()
 }
