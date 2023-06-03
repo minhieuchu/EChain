@@ -3,8 +3,6 @@ package network
 import (
 	"EChain/blockchain"
 
-	"bytes"
-	"encoding/gob"
 	"fmt"
 	"io"
 	"log"
@@ -41,9 +39,8 @@ type p2pNode struct {
 
 func (node *p2pNode) handleVersionMsg(msg []byte) {
 	var versionMsg versionMessage
-	byteBuffer := bytes.NewBuffer(msg)
-	decoder := gob.NewDecoder(byteBuffer)
-	decoder.Decode(&versionMsg)
+	genericDeserialize(msg, &versionMsg)
+
 	if node.nVersion == versionMsg.Version {
 		node.sendVerackMsg(versionMsg.AddrMe)
 		if !slices.Contains(node.connectedPeers, versionMsg.AddrMe) {
@@ -54,18 +51,16 @@ func (node *p2pNode) handleVersionMsg(msg []byte) {
 
 func (node *p2pNode) handleVerackMsg(msg []byte) {
 	var verackMsg verackMessage
-	byteBuffer := bytes.NewBuffer(msg)
-	decoder := gob.NewDecoder(byteBuffer)
-	decoder.Decode(&verackMsg)
+	genericDeserialize(msg, &verackMsg)
+
 	node.connectedPeers = append(node.connectedPeers, verackMsg.AddrFrom)
 	node.sendAddrMsg(verackMsg.AddrFrom)
+	node.sendGetBlocksMsg(verackMsg.AddrFrom)
 }
 
 func (node *p2pNode) handleAddrMsg(msg []byte) {
 	var addrMsg addrMessage
-	byteBuffer := bytes.NewBuffer(msg)
-	decoder := gob.NewDecoder(byteBuffer)
-	decoder.Decode(&addrMsg)
+	genericDeserialize(msg, &addrMsg)
 
 	if !slices.Contains(node.connectedPeers, addrMsg.Address) {
 		node.sendVersionMsg(addrMsg.Address)
@@ -79,6 +74,19 @@ func (node *p2pNode) handleAddrMsg(msg []byte) {
 				sendMessage(peerAddr, sentData)
 			}
 		}
+	}
+}
+
+func (node *p2pNode) handleGetblocksMsg(msg []byte) {
+	var getblocksMsg getblocksMessage
+	genericDeserialize(msg, &getblocksMsg)
+
+	remoteLastBlockHash := getblocksMsg.TopBlockHash
+	blockExisted, unmatchedBlocks := node.blockchain.GetUnmatchedBlocks(remoteLastBlockHash)
+	if blockExisted && len(unmatchedBlocks) > 0 {
+		// Send inv message
+	} else if !blockExisted {
+		node.sendGetBlocksMsg(getblocksMsg.AddrFrom)
 	}
 }
 
@@ -96,9 +104,19 @@ func (node *p2pNode) handleConnection(conn net.Conn) {
 		node.handleVerackMsg(payload)
 	case ADDR_MSG:
 		node.handleAddrMsg(payload)
+	case GETBLOCKS_MSG:
+		node.handleGetblocksMsg(payload)
 	default:
 		fmt.Println("invalid message")
 	}
+}
+
+func (node *p2pNode) sendGetBlocksMsg(toAddress string) {
+	fmt.Println("Send Getblocks msg from", node.networkAddress, "to", toAddress)
+	lastBlockHash := node.blockchain.LastHash
+	getblocksMsg := getblocksMessage{lastBlockHash, node.networkAddress}
+	sentData := append(msgTypeToBytes(GETBLOCKS_MSG), serialize(getblocksMsg)...)
+	sendMessage(toAddress, sentData)
 }
 
 func (node *p2pNode) sendAddrMsg(toAddress string) {

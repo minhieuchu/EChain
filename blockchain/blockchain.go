@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/syndtr/goleveldb/leveldb"
+	"golang.org/x/exp/slices"
 )
 
 type BlockChain struct {
@@ -150,4 +151,28 @@ func (blockchain *BlockChain) Transfer(privKey ecdsa.PrivateKey, pubKey []byte, 
 	err := blockchain.AddBlock([]*Transaction{&newTransaction})
 
 	return err
+}
+
+func (blockchain *BlockChain) GetUnmatchedBlocks(targetBlockHash []byte) (bool, [][]byte) {
+	blockExisted := false
+	unmatchedBlocks := make([][]byte, 0)
+	chainIterator := BlockChainIterator{blockchain.DataBase, blockchain.LastHash}
+
+	for {
+		currentBlock := chainIterator.CurrentBlock()
+
+		if slices.Equal(currentBlock.Hash, targetBlockHash) {
+			blockExisted = true
+			break
+		}
+
+		if len(currentBlock.PrevHash) == 0 {
+			break
+		} else {
+			unmatchedBlocks = append(unmatchedBlocks, currentBlock.Hash)
+		}
+		chainIterator.CurrentHash = currentBlock.PrevHash
+	}
+
+	return blockExisted, unmatchedBlocks
 }

@@ -14,3 +14,8 @@ type verackMessage struct {
 type addrMessage struct {
 	Address string
 }
+
+type getblocksMessage struct {
+	TopBlockHash []byte
+	AddrFrom     string
+}
