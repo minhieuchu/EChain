@@ -12,6 +12,7 @@ import (
 type BlockChain struct {
 	DataBase *leveldb.DB
 	LastHash []byte
+	Height   int
 }
 
 type BlockChainIterator struct {
@@ -23,13 +24,13 @@ var WALLET_ADDRESS string
 
 func InitBlockChain(networkAddress, walletAddress string) *BlockChain {
 	WALLET_ADDRESS = walletAddress
-	db, err := leveldb.OpenFile("storage/" + networkAddress, nil)
+	db, err := leveldb.OpenFile("storage/"+networkAddress, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	genesisBlock := Genesis()
-	blockchain := BlockChain{db, genesisBlock.Hash}
+	blockchain := BlockChain{db, genesisBlock.Hash, 1}
 	blockchain.StoreNewBlock(genesisBlock)
 
 	utxoSet := blockchain.UTXOSet()
@@ -42,6 +43,10 @@ func (chainIterator *BlockChainIterator) CurrentBlock() *Block {
 	encodedBlock, err := chainIterator.DataBase.Get(chainIterator.CurrentHash, nil)
 	handleErr(err)
 	return DeserializeBlock(encodedBlock)
+}
+
+func (blockchain *BlockChain) GetHeight() int {
+	return blockchain.Height
 }
 
 func (blockchain *BlockChain) UTXOSet() UTXOSet {
@@ -100,6 +105,7 @@ func (blockchain *BlockChain) AddBlock(transactions []*Transaction) error {
 	}
 	newBlock.Mine()
 	blockchain.StoreNewBlock(&newBlock)
+	blockchain.Height += 1
 	return nil
 }
 

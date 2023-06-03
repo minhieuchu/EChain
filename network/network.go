@@ -110,7 +110,7 @@ func (node *p2pNode) sendAddrMsg(toAddress string) {
 
 func (node *p2pNode) sendVersionMsg(toAddress string) {
 	fmt.Println("Send Version msg from", node.networkAddress, "to", toAddress)
-	nBestHeight := 1
+	nBestHeight := node.blockchain.GetHeight()
 	versionMsg := versionMessage{node.nVersion, toAddress, node.networkAddress, nBestHeight}
 	sentData := append(msgTypeToBytes(VERSION_MSG), serialize(versionMsg)...)
 	sendMessage(toAddress, sentData)
@@ -128,7 +128,7 @@ func StartBlockChainNode(networkAddress, walletAddress string) {
 	blockchainNode := p2pNode{
 		nVersion:       1,
 		networkAddress: networkAddress,
-		blockchain: localBlockchain,
+		blockchain:     localBlockchain,
 	}
 
 	fmt.Println("Starting blockchain node at", networkAddress)
