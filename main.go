@@ -1,7 +1,6 @@
 package main
 
 import (
-	"EChain/blockchain"
 	"EChain/network"
 	"EChain/wallet"
 	"fmt"
@@ -16,10 +15,6 @@ func main() {
 	wallets := wallet.LoadWallets()
 	addressList := wallets.GetAddresses()
 	walletAddress := addressList[0] // miner node's wallet address
-
-	chain := blockchain.InitBlockChain(walletAddress)
-	defer chain.DataBase.Close()
-
 	// ======= Testing =======
 
 	var wg sync.WaitGroup

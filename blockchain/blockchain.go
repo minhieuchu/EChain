@@ -21,9 +21,9 @@ type BlockChainIterator struct {
 
 var WALLET_ADDRESS string
 
-func InitBlockChain(walletAddress string) *BlockChain {
+func InitBlockChain(networkAddress, walletAddress string) *BlockChain {
 	WALLET_ADDRESS = walletAddress
-	db, err := leveldb.OpenFile("storage", nil)
+	db, err := leveldb.OpenFile("storage/" + networkAddress, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

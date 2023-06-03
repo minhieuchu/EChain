@@ -124,7 +124,7 @@ func (node *p2pNode) sendVerackMsg(toAddress string) {
 }
 
 func StartBlockChainNode(networkAddress, walletAddress string) {
-	localBlockchain := blockchain.InitBlockChain(walletAddress)
+	localBlockchain := blockchain.InitBlockChain(networkAddress, walletAddress)
 	blockchainNode := p2pNode{
 		nVersion:       1,
 		networkAddress: networkAddress,
