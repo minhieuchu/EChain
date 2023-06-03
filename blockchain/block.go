@@ -5,7 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/gob"
 	"math/big"
+	"os"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 type Block struct {
@@ -41,7 +44,12 @@ func (block *Block) Mine() {
 }
 
 func Genesis() *Block {
-	coinbaseTransaction := CoinBaseTransaction(WALLET_ADDRESS)
+	err := godotenv.Load()
+	handleErr(err)
+
+	satoshiAddress := os.Getenv("SATOSHI_ADDRESS")
+	coinbaseTransaction := CoinBaseTransaction(satoshiAddress)
+
 	block := Block{
 		Transactions: []*Transaction{coinbaseTransaction},
 		Timestamp:    time.Now().String(),
