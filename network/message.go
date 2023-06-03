@@ -10,3 +10,7 @@ type versionMessage struct {
 type verackMessage struct {
 	AddrFrom string
 }
+
+type addrMessage struct {
+	Address string
+}

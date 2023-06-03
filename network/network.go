@@ -30,9 +30,10 @@ const (
 )
 
 type p2pNode struct {
-	nVersion       int
-	networkAddress string
-	connectedPeers []string
+	nVersion          int
+	networkAddress    string
+	connectedPeers    []string
+	forwardedAddrList []string
 }
 
 func (node *p2pNode) handleVersionMsg(msg []byte) {
@@ -54,7 +55,22 @@ func (node *p2pNode) handleVerackMsg(msg []byte) {
 	decoder := gob.NewDecoder(byteBuffer)
 	decoder.Decode(&verackMsg)
 	node.connectedPeers = append(node.connectedPeers, verackMsg.AddrFrom)
-	// Todo: Send addr message
+	node.sendAddrMsg(verackMsg.AddrFrom)
+}
+
+func (node *p2pNode) handleAddrMsg(msg []byte) {
+	var addrMsg addrMessage
+	byteBuffer := bytes.NewBuffer(msg)
+	decoder := gob.NewDecoder(byteBuffer)
+	decoder.Decode(&addrMsg)
+
+	if !slices.Contains(node.forwardedAddrList, addrMsg.Address) {
+		node.forwardedAddrList = append(node.forwardedAddrList, addrMsg.Address)
+		for _, peerAddr := range node.connectedPeers {
+			sentData := append(msgTypeToBytes(ADDR_MSG), msg...)
+			sendMessage(peerAddr, sentData)
+		}
+	}
 }
 
 func (node *p2pNode) handleConnection(conn net.Conn) {
@@ -69,9 +85,18 @@ func (node *p2pNode) handleConnection(conn net.Conn) {
 		node.handleVersionMsg(payload)
 	case VERACK_MSG:
 		node.handleVerackMsg(payload)
+	case ADDR_MSG:
+		node.handleAddrMsg(payload)
 	default:
 		fmt.Println("invalid message")
 	}
+}
+
+func (node *p2pNode) sendAddrMsg(toAddress string) {
+	fmt.Println("Send Addr msg from", node.networkAddress, "to", toAddress)
+	addrMsg := addrMessage{node.networkAddress}
+	sentData := append(msgTypeToBytes(ADDR_MSG), serialize(addrMsg)...)
+	sendMessage(toAddress, sentData)
 }
 
 func (node *p2pNode) sendVersionMsg(toAddress string) {
