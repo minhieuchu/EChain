@@ -176,3 +176,12 @@ func (blockchain *BlockChain) GetUnmatchedBlocks(targetBlockHash []byte) (bool, 
 
 	return blockExisted, unmatchedBlocks
 }
+
+func (blockchain *BlockChain) GetBlocksFromHashes(hashList [][]byte) []*Block {
+	blockList := []*Block{}
+	for _, blockHash := range hashList {
+		encodedBlock, _ := blockchain.DataBase.Get(blockHash, nil)
+		blockList = append(blockList, DeserializeBlock(encodedBlock))
+	}
+	return blockList
+}

@@ -2,6 +2,7 @@ package network
 
 import (
 	"EChain/blockchain"
+	"sync"
 
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"golang.org/x/exp/slices"
 )
 
@@ -36,6 +38,8 @@ type p2pNode struct {
 	forwardedAddrList []string
 	blockchain        *blockchain.BlockChain
 }
+
+// ======= Handle requests =======
 
 func (node *p2pNode) handleVersionMsg(msg []byte) {
 	var versionMsg versionMessage
@@ -98,6 +102,14 @@ func (node *p2pNode) handleGetblocksMsg(msg []byte) {
 	}
 }
 
+func (node *p2pNode) handleGetdataMsg(msg []byte) {
+	var getdataMsg getdataMessage
+	genericDeserialize(msg, &getdataMsg)
+
+	blockList := node.blockchain.GetBlocksFromHashes(getdataMsg.HashList)
+	sendMessage(getdataMsg.AddrFrom, serialize(blockList))
+}
+
 func (node *p2pNode) handleInvMsg(msg []byte) {
 	var invMsg invMessage
 	genericDeserialize(msg, &invMsg)
@@ -113,7 +125,41 @@ func (node *p2pNode) handleInvMsg(msg []byte) {
 			getdataMsgList[lastIndex].HashList = append(getdataMsgList[lastIndex].HashList, blockHash)
 		}
 	}
-	// Todo: send getdata messages to peers
+
+	// Send getdata messages to peers
+	var wg sync.WaitGroup
+	var mutex sync.Mutex
+	msgIndex := 1
+	wg.Add(len(getdataMsgList))
+
+	for peerIndex, peerAddr := range node.connectedPeers {
+		if peerIndex >= len(getdataMsgList) {
+			break
+		}
+		go func(toAddress string) {
+			for {
+				mutex.Lock()
+				if msgIndex >= len(getdataMsgList) {
+					return
+				}
+				getdataMsg := getdataMsgList[msgIndex]
+				msgIndex++
+				mutex.Unlock()
+
+				sentData := append(msgTypeToBytes(GETDATA_MSG), serialize(getdataMsg)...)
+				conn, _ := net.Dial(protocol, toAddress)
+				conn.Write(sentData)
+				defer conn.Close()
+
+				response, _ := io.ReadAll(conn)
+				var blockList []*blockchain.Block
+				genericDeserialize(response, &blockList)
+				spew.Dump(blockList)
+				wg.Done()
+			}
+		}(peerAddr)
+	}
+	wg.Wait()
 }
 
 func (node *p2pNode) handleConnection(conn net.Conn) {
@@ -134,12 +180,17 @@ func (node *p2pNode) handleConnection(conn net.Conn) {
 		node.handleGetblocksMsg(payload)
 	case INV_MSG:
 		node.handleInvMsg(payload)
+	case GETDATA_MSG:
+		node.handleGetdataMsg(payload)
 	default:
 		fmt.Println("invalid message")
 	}
 }
 
+// ======= Send messages =======
+
 func (node *p2pNode) sendInvMessage(toAddress string, invMsg *invMessage) {
+	fmt.Println("Send Inv msg from", node.networkAddress, "to", toAddress)
 	sentData := append(msgTypeToBytes(INV_MSG), serialize(invMsg)...)
 	sendMessage(toAddress, sentData)
 }
