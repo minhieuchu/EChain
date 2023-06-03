@@ -18,15 +18,15 @@ const (
 	VERSION_MSG   = "version"
 	VERACK_MSG    = "verack"
 	ADDR_MSG      = "addr"
-	GETADDR_MSG   = "getaddr"
 	GETBLOCKS_MSG = "getblocks"
 	INV_MSG       = "inv"
 	GETDATA_MSG   = "getdata"
 )
 
 const (
-	protocol      = "tcp"
-	msgTypeLength = 12 // First 12 bytes of each byte slice exchanged between peers are reserved for message type
+	protocol                       = "tcp"
+	msgTypeLength                  = 12 // First 12 bytes of each byte slice exchanged between peers are reserved for message type
+	MAX_BLOCKS_IN_TRANSIT_PER_PEER = 10
 )
 
 type p2pNode struct {
@@ -84,10 +84,36 @@ func (node *p2pNode) handleGetblocksMsg(msg []byte) {
 	remoteLastBlockHash := getblocksMsg.TopBlockHash
 	blockExisted, unmatchedBlocks := node.blockchain.GetUnmatchedBlocks(remoteLastBlockHash)
 	if blockExisted && len(unmatchedBlocks) > 0 {
-		// Send inv message
+		blockHashesToSend := [][]byte{}
+		for i := len(unmatchedBlocks) - 1; i >= 0; i-- {
+			blockHashesToSend = append(blockHashesToSend, unmatchedBlocks[i])
+			if len(blockHashesToSend) > 500 {
+				break
+			}
+		}
+		invMsg := invMessage{blockHashesToSend}
+		node.sendInvMessage(getblocksMsg.AddrFrom, &invMsg)
 	} else if !blockExisted {
 		node.sendGetBlocksMsg(getblocksMsg.AddrFrom)
 	}
+}
+
+func (node *p2pNode) handleInvMsg(msg []byte) {
+	var invMsg invMessage
+	genericDeserialize(msg, &invMsg)
+
+	getdataMsgList := []getdataMessage{}
+	for _, blockHash := range invMsg.HashList {
+		lastIndex := len(getdataMsgList) - 1
+		if len(getdataMsgList) == 0 || len(getdataMsgList[lastIndex].HashList) >= MAX_BLOCKS_IN_TRANSIT_PER_PEER {
+			newHashList := [][]byte{blockHash}
+			newGetDataMsg := getdataMessage{newHashList, node.networkAddress}
+			getdataMsgList = append(getdataMsgList, newGetDataMsg)
+		} else {
+			getdataMsgList[lastIndex].HashList = append(getdataMsgList[lastIndex].HashList, blockHash)
+		}
+	}
+	// Todo: send getdata messages to peers
 }
 
 func (node *p2pNode) handleConnection(conn net.Conn) {
@@ -106,9 +132,16 @@ func (node *p2pNode) handleConnection(conn net.Conn) {
 		node.handleAddrMsg(payload)
 	case GETBLOCKS_MSG:
 		node.handleGetblocksMsg(payload)
+	case INV_MSG:
+		node.handleInvMsg(payload)
 	default:
 		fmt.Println("invalid message")
 	}
+}
+
+func (node *p2pNode) sendInvMessage(toAddress string, invMsg *invMessage) {
+	sentData := append(msgTypeToBytes(INV_MSG), serialize(invMsg)...)
+	sendMessage(toAddress, sentData)
 }
 
 func (node *p2pNode) sendGetBlocksMsg(toAddress string) {

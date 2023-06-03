@@ -19,3 +19,12 @@ type getblocksMessage struct {
 	TopBlockHash []byte
 	AddrFrom     string
 }
+
+type invMessage struct {
+	HashList [][]byte
+}
+
+type getdataMessage struct {
+	HashList [][]byte
+	AddrFrom string
+}
