@@ -54,6 +54,14 @@ func (blockchain *BlockChain) UTXOSet() UTXOSet {
 	return UTXOSet{blockchain.DataBase}
 }
 
+func (blockchain *BlockChain) SetBlock(block *Block) {
+	blockchain.DataBase.Put(block.Hash, serialize(block), nil)
+}
+
+func (blockchain *BlockChain) SetLastHash(hash []byte) {
+	blockchain.DataBase.Put([]byte(LAST_HASH_STOGAGE_KEY), hash, nil)
+}
+
 func (blockchain *BlockChain) StoreNewBlock(block *Block) {
 	blockchain.LastHash = block.Hash
 	blockchain.DataBase.Put(block.Hash, serialize(block), nil)

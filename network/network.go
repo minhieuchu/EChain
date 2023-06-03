@@ -10,7 +10,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"golang.org/x/exp/slices"
 )
 
@@ -130,17 +129,21 @@ func (node *p2pNode) handleInvMsg(msg []byte) {
 	var wg sync.WaitGroup
 	var mutex sync.Mutex
 	msgIndex := 1
-	wg.Add(len(getdataMsgList))
+	msgNum := len(getdataMsgList)
+	wg.Add(msgNum)
 
 	for peerIndex, peerAddr := range node.connectedPeers {
-		if peerIndex >= len(getdataMsgList) {
+		if peerIndex >= msgNum {
 			break
 		}
 		go func(toAddress string) {
 			for {
+				isLastMsg := false
 				mutex.Lock()
-				if msgIndex >= len(getdataMsgList) {
+				if msgIndex >= msgNum {
 					return
+				} else if msgIndex == msgNum-1 {
+					isLastMsg = true
 				}
 				getdataMsg := getdataMsgList[msgIndex]
 				msgIndex++
@@ -154,12 +157,21 @@ func (node *p2pNode) handleInvMsg(msg []byte) {
 				response, _ := io.ReadAll(conn)
 				var blockList []*blockchain.Block
 				genericDeserialize(response, &blockList)
-				spew.Dump(blockList)
+
+				for _, block := range blockList {
+					node.blockchain.SetBlock(block)
+				}
+				if isLastMsg {
+					node.blockchain.SetLastHash(blockList[len(blockList)-1].Hash)
+				}
 				wg.Done()
 			}
 		}(peerAddr)
 	}
 	wg.Wait()
+	for _, peerAddr := range node.connectedPeers {
+		node.sendGetBlocksMsg(peerAddr)
+	}
 }
 
 func (node *p2pNode) handleConnection(conn net.Conn) {
