@@ -48,11 +48,18 @@ func Genesis() *Block {
 	handleErr(err)
 
 	satoshiAddress := os.Getenv("SATOSHI_ADDRESS")
-	coinbaseTransaction := CoinBaseTransaction(satoshiAddress)
+	genesisBlockDate, _ := time.Parse("2006-Jan-02", "2009-Jan-03")
+	txOutput := createTxnOutput(COINBASE_REWARD, satoshiAddress)
+	coinbaseTransaction := Transaction{
+		Inputs:  []TxInput{},
+		Outputs: []TxOutput{txOutput},
+		Locktime: genesisBlockDate.UnixMilli(),
+	}
+	coinbaseTransaction.SetHash()
 
 	block := Block{
-		Transactions: []*Transaction{coinbaseTransaction},
-		Timestamp:    time.Now().String(),
+		Transactions: []*Transaction{&coinbaseTransaction},
+		Timestamp:    genesisBlockDate.String(),
 		PrevHash:     []byte{},
 	}
 	block.Mine()
