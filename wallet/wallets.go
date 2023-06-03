@@ -67,7 +67,7 @@ func (wallets *Wallets) SaveFile() {
 }
 
 func (wallets *Wallets) Transfer(toAddress string, amount int) error {
-	senderWallet := wallets.GetWallet(blockchain.NODE_ADDRESS)
+	senderWallet := wallets.GetWallet(blockchain.WALLET_ADDRESS)
 	err := wallets.connectedChain.Transfer(senderWallet.PrivateKey, senderWallet.PublickKey, toAddress, amount)
 	return err
 }

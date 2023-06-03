@@ -28,7 +28,7 @@ func main() {
 		portNumber := 8333 + i
 		go func() {
 			defer wg.Done()
-			network.StartBlockChainNode("127.0.0.1:" + fmt.Sprint(portNumber))
+			network.StartBlockChainNode("127.0.0.1:" + fmt.Sprint(portNumber), walletAddress)
 		}()
 	}
 	wg.Wait()

@@ -19,10 +19,10 @@ type BlockChainIterator struct {
 	CurrentHash []byte
 }
 
-var NODE_ADDRESS string
+var WALLET_ADDRESS string
 
-func InitBlockChain(address string) *BlockChain {
-	NODE_ADDRESS = address
+func InitBlockChain(walletAddress string) *BlockChain {
+	WALLET_ADDRESS = walletAddress
 	db, err := leveldb.OpenFile("storage", nil)
 	if err != nil {
 		log.Fatal(err)
@@ -92,7 +92,7 @@ func (blockchain *BlockChain) AddBlock(transactions []*Transaction) error {
 			return errors.New("invalid transaction")
 		}
 	}
-	coinbaseTransaction := CoinBaseTransaction(NODE_ADDRESS)
+	coinbaseTransaction := CoinBaseTransaction(WALLET_ADDRESS)
 	newBlock := Block{
 		Transactions: append([]*Transaction{coinbaseTransaction}, transactions...),
 		Timestamp:    time.Now().String(),

@@ -1,6 +1,8 @@
 package network
 
 import (
+	"EChain/blockchain"
+
 	"bytes"
 	"encoding/gob"
 	"fmt"
@@ -34,6 +36,7 @@ type p2pNode struct {
 	networkAddress    string
 	connectedPeers    []string
 	forwardedAddrList []string
+	blockchain        *blockchain.BlockChain
 }
 
 func (node *p2pNode) handleVersionMsg(msg []byte) {
@@ -64,11 +67,17 @@ func (node *p2pNode) handleAddrMsg(msg []byte) {
 	decoder := gob.NewDecoder(byteBuffer)
 	decoder.Decode(&addrMsg)
 
+	if !slices.Contains(node.connectedPeers, addrMsg.Address) {
+		node.sendVersionMsg(addrMsg.Address)
+	}
+
 	if !slices.Contains(node.forwardedAddrList, addrMsg.Address) {
 		node.forwardedAddrList = append(node.forwardedAddrList, addrMsg.Address)
 		for _, peerAddr := range node.connectedPeers {
-			sentData := append(msgTypeToBytes(ADDR_MSG), msg...)
-			sendMessage(peerAddr, sentData)
+			if peerAddr != addrMsg.Address {
+				sentData := append(msgTypeToBytes(ADDR_MSG), msg...)
+				sendMessage(peerAddr, sentData)
+			}
 		}
 	}
 }
@@ -114,10 +123,12 @@ func (node *p2pNode) sendVerackMsg(toAddress string) {
 	sendMessage(toAddress, sentData)
 }
 
-func StartBlockChainNode(networkAddress string) {
+func StartBlockChainNode(networkAddress, walletAddress string) {
+	localBlockchain := blockchain.InitBlockChain(walletAddress)
 	blockchainNode := p2pNode{
 		nVersion:       1,
 		networkAddress: networkAddress,
+		blockchain: localBlockchain,
 	}
 
 	fmt.Println("Starting blockchain node at", networkAddress)
