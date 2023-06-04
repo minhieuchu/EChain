@@ -56,6 +56,9 @@ func (node *P2PNode) handleVerackMsg(msg []byte) {
 	var verackMsg verackMessage
 	genericDeserialize(msg, &verackMsg)
 
+	if slices.Contains(node.ConnectedPeers, verackMsg.AddrFrom) {
+		return
+	}
 	node.ConnectedPeers = append(node.ConnectedPeers, verackMsg.AddrFrom)
 	node.sendAddrMsg(verackMsg.AddrFrom)
 	node.sendGetBlocksMsg(verackMsg.AddrFrom)

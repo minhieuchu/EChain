@@ -27,9 +27,14 @@ func main() {
 		var blockchainNode *network.P2PNode
 		go func() {
 			defer wg.Done()
-			var transaction blockchain.Transaction
 			blockchainNode = network.NewBlockChainNode("127.0.0.1:"+fmt.Sprint(portNumber), walletAddress)
-			blockchainNode.Blockchain.AddBlock([]*blockchain.Transaction{&transaction})
+			for i := 0; i < 20; i++ {
+				var block blockchain.Block
+				lastHash, _ := blockchainNode.Blockchain.DataBase.Get([]byte(blockchain.LAST_HASH_STOGAGE_KEY), nil)
+				block.PrevHash = lastHash
+				block.Mine()
+				blockchainNode.Blockchain.StoreNewBlock(&block)
+			}
 			blockchainNode.StartP2PNode()
 		}()
 	}
