@@ -30,48 +30,48 @@ const (
 	MAX_BLOCKS_IN_TRANSIT_PER_PEER = 10
 )
 
-type p2pNode struct {
-	nVersion          int
-	networkAddress    string
-	connectedPeers    []string
-	forwardedAddrList []string
-	blockchain        *blockchain.BlockChain
+type P2PNode struct {
+	Version           int
+	NetworkAddress    string
+	ConnectedPeers    []string
+	ForwardedAddrList []string
+	Blockchain        *blockchain.BlockChain
 }
 
 // ======= Handle requests =======
 
-func (node *p2pNode) handleVersionMsg(msg []byte) {
+func (node *P2PNode) handleVersionMsg(msg []byte) {
 	var versionMsg versionMessage
 	genericDeserialize(msg, &versionMsg)
 
-	if node.nVersion == versionMsg.Version {
+	if node.Version == versionMsg.Version {
 		node.sendVerackMsg(versionMsg.AddrMe)
-		if !slices.Contains(node.connectedPeers, versionMsg.AddrMe) {
+		if !slices.Contains(node.ConnectedPeers, versionMsg.AddrMe) {
 			node.sendVersionMsg(versionMsg.AddrMe)
 		}
 	}
 }
 
-func (node *p2pNode) handleVerackMsg(msg []byte) {
+func (node *P2PNode) handleVerackMsg(msg []byte) {
 	var verackMsg verackMessage
 	genericDeserialize(msg, &verackMsg)
 
-	node.connectedPeers = append(node.connectedPeers, verackMsg.AddrFrom)
+	node.ConnectedPeers = append(node.ConnectedPeers, verackMsg.AddrFrom)
 	node.sendAddrMsg(verackMsg.AddrFrom)
 	node.sendGetBlocksMsg(verackMsg.AddrFrom)
 }
 
-func (node *p2pNode) handleAddrMsg(msg []byte) {
+func (node *P2PNode) handleAddrMsg(msg []byte) {
 	var addrMsg addrMessage
 	genericDeserialize(msg, &addrMsg)
 
-	if !slices.Contains(node.connectedPeers, addrMsg.Address) {
+	if !slices.Contains(node.ConnectedPeers, addrMsg.Address) {
 		node.sendVersionMsg(addrMsg.Address)
 	}
 
-	if !slices.Contains(node.forwardedAddrList, addrMsg.Address) {
-		node.forwardedAddrList = append(node.forwardedAddrList, addrMsg.Address)
-		for _, peerAddr := range node.connectedPeers {
+	if !slices.Contains(node.ForwardedAddrList, addrMsg.Address) {
+		node.ForwardedAddrList = append(node.ForwardedAddrList, addrMsg.Address)
+		for _, peerAddr := range node.ConnectedPeers {
 			if peerAddr != addrMsg.Address {
 				sentData := append(msgTypeToBytes(ADDR_MSG), msg...)
 				sendMessage(peerAddr, sentData)
@@ -80,17 +80,17 @@ func (node *p2pNode) handleAddrMsg(msg []byte) {
 	}
 }
 
-func (node *p2pNode) handleGetblocksMsg(msg []byte) {
+func (node *P2PNode) handleGetblocksMsg(msg []byte) {
 	var getblocksMsg getblocksMessage
 	genericDeserialize(msg, &getblocksMsg)
 
 	remoteLastBlockHash := getblocksMsg.TopBlockHash
-	blockExisted, unmatchedBlocks := node.blockchain.GetUnmatchedBlocks(remoteLastBlockHash)
+	blockExisted, unmatchedBlocks := node.Blockchain.GetUnmatchedBlocks(remoteLastBlockHash)
 	if blockExisted && len(unmatchedBlocks) > 0 {
 		blockHashesToSend := [][]byte{}
 		for i := len(unmatchedBlocks) - 1; i >= 0; i-- {
 			blockHashesToSend = append(blockHashesToSend, unmatchedBlocks[i])
-			if len(blockHashesToSend) > 500 {
+			if len(blockHashesToSend) >= 500 {
 				break
 			}
 		}
@@ -101,15 +101,15 @@ func (node *p2pNode) handleGetblocksMsg(msg []byte) {
 	}
 }
 
-func (node *p2pNode) handleGetdataMsg(msg []byte) {
+func (node *P2PNode) handleGetdataMsg(msg []byte) {
 	var getdataMsg getdataMessage
 	genericDeserialize(msg, &getdataMsg)
 
-	blockList := node.blockchain.GetBlocksFromHashes(getdataMsg.HashList)
+	blockList := node.Blockchain.GetBlocksFromHashes(getdataMsg.HashList)
 	sendMessage(getdataMsg.AddrFrom, serialize(blockList))
 }
 
-func (node *p2pNode) handleInvMsg(msg []byte) {
+func (node *P2PNode) handleInvMsg(msg []byte) {
 	var invMsg invMessage
 	genericDeserialize(msg, &invMsg)
 
@@ -118,7 +118,7 @@ func (node *p2pNode) handleInvMsg(msg []byte) {
 		lastIndex := len(getdataMsgList) - 1
 		if len(getdataMsgList) == 0 || len(getdataMsgList[lastIndex].HashList) >= MAX_BLOCKS_IN_TRANSIT_PER_PEER {
 			newHashList := [][]byte{blockHash}
-			newGetDataMsg := getdataMessage{newHashList, node.networkAddress}
+			newGetDataMsg := getdataMessage{newHashList, node.NetworkAddress}
 			getdataMsgList = append(getdataMsgList, newGetDataMsg)
 		} else {
 			getdataMsgList[lastIndex].HashList = append(getdataMsgList[lastIndex].HashList, blockHash)
@@ -132,7 +132,7 @@ func (node *p2pNode) handleInvMsg(msg []byte) {
 	msgNum := len(getdataMsgList)
 	wg.Add(msgNum)
 
-	for peerIndex, peerAddr := range node.connectedPeers {
+	for peerIndex, peerAddr := range node.ConnectedPeers {
 		if peerIndex >= msgNum {
 			break
 		}
@@ -159,22 +159,22 @@ func (node *p2pNode) handleInvMsg(msg []byte) {
 				genericDeserialize(response, &blockList)
 
 				for _, block := range blockList {
-					node.blockchain.SetBlock(block)
+					node.Blockchain.SetBlock(block)
 				}
 				if isLastMsg {
-					node.blockchain.SetLastHash(blockList[len(blockList)-1].Hash)
+					node.Blockchain.SetLastHash(blockList[len(blockList)-1].Hash)
 				}
 				wg.Done()
 			}
 		}(peerAddr)
 	}
 	wg.Wait()
-	for _, peerAddr := range node.connectedPeers {
+	for _, peerAddr := range node.ConnectedPeers {
 		node.sendGetBlocksMsg(peerAddr)
 	}
 }
 
-func (node *p2pNode) handleConnection(conn net.Conn) {
+func (node *P2PNode) handleConnection(conn net.Conn) {
 	data, err := io.ReadAll(conn)
 	defer conn.Close()
 	handleError(err)
@@ -201,61 +201,54 @@ func (node *p2pNode) handleConnection(conn net.Conn) {
 
 // ======= Send messages =======
 
-func (node *p2pNode) sendInvMessage(toAddress string, invMsg *invMessage) {
-	fmt.Println("Send Inv msg from", node.networkAddress, "to", toAddress)
+func (node *P2PNode) sendInvMessage(toAddress string, invMsg *invMessage) {
+	fmt.Println("Send Inv msg from", node.NetworkAddress, "to", toAddress)
 	sentData := append(msgTypeToBytes(INV_MSG), serialize(invMsg)...)
 	sendMessage(toAddress, sentData)
 }
 
-func (node *p2pNode) sendGetBlocksMsg(toAddress string) {
-	fmt.Println("Send Getblocks msg from", node.networkAddress, "to", toAddress)
-	lastBlockHash := node.blockchain.LastHash
-	getblocksMsg := getblocksMessage{lastBlockHash, node.networkAddress}
+func (node *P2PNode) sendGetBlocksMsg(toAddress string) {
+	fmt.Println("Send Getblocks msg from", node.NetworkAddress, "to", toAddress)
+	lastBlockHash := node.Blockchain.LastHash
+	getblocksMsg := getblocksMessage{lastBlockHash, node.NetworkAddress}
 	sentData := append(msgTypeToBytes(GETBLOCKS_MSG), serialize(getblocksMsg)...)
 	sendMessage(toAddress, sentData)
 }
 
-func (node *p2pNode) sendAddrMsg(toAddress string) {
-	fmt.Println("Send Addr msg from", node.networkAddress, "to", toAddress)
-	addrMsg := addrMessage{node.networkAddress}
+func (node *P2PNode) sendAddrMsg(toAddress string) {
+	fmt.Println("Send Addr msg from", node.NetworkAddress, "to", toAddress)
+	addrMsg := addrMessage{node.NetworkAddress}
 	sentData := append(msgTypeToBytes(ADDR_MSG), serialize(addrMsg)...)
 	sendMessage(toAddress, sentData)
 }
 
-func (node *p2pNode) sendVersionMsg(toAddress string) {
-	fmt.Println("Send Version msg from", node.networkAddress, "to", toAddress)
-	nBestHeight := node.blockchain.GetHeight()
-	versionMsg := versionMessage{node.nVersion, toAddress, node.networkAddress, nBestHeight}
+func (node *P2PNode) sendVersionMsg(toAddress string) {
+	fmt.Println("Send Version msg from", node.NetworkAddress, "to", toAddress)
+	nBestHeight := node.Blockchain.GetHeight()
+	versionMsg := versionMessage{node.Version, toAddress, node.NetworkAddress, nBestHeight}
 	sentData := append(msgTypeToBytes(VERSION_MSG), serialize(versionMsg)...)
 	sendMessage(toAddress, sentData)
 }
 
-func (node *p2pNode) sendVerackMsg(toAddress string) {
-	fmt.Println("Send Verack msg from", node.networkAddress, "to", toAddress)
-	verackMsg := verackMessage{node.networkAddress}
+func (node *P2PNode) sendVerackMsg(toAddress string) {
+	fmt.Println("Send Verack msg from", node.NetworkAddress, "to", toAddress)
+	verackMsg := verackMessage{node.NetworkAddress}
 	sentData := append(msgTypeToBytes(VERACK_MSG), serialize(verackMsg)...)
 	sendMessage(toAddress, sentData)
 }
 
-func StartBlockChainNode(networkAddress, walletAddress string) {
-	localBlockchain := blockchain.InitBlockChain(networkAddress, walletAddress)
-	blockchainNode := p2pNode{
-		nVersion:       1,
-		networkAddress: networkAddress,
-		blockchain:     localBlockchain,
-	}
-
-	fmt.Println("Starting blockchain node at", networkAddress)
-	ln, err := net.Listen(protocol, networkAddress)
+func (node *P2PNode) StartP2PNode() {
+	fmt.Println(" ===== Starting blockchain node at", node.NetworkAddress, "=====")
+	ln, err := net.Listen(protocol, node.NetworkAddress)
 	if err != nil {
-		log.Fatal("can not start server at", networkAddress)
+		log.Fatal("can not start server at", node.NetworkAddress)
 	}
 
 	go func() {
 		time.Sleep(2 * time.Second)
 		for _, peerAddr := range initialPeers {
-			if peerAddr != blockchainNode.networkAddress {
-				blockchainNode.sendVersionMsg(peerAddr)
+			if peerAddr != node.NetworkAddress {
+				node.sendVersionMsg(peerAddr)
 			}
 		}
 	}()
@@ -266,6 +259,16 @@ func StartBlockChainNode(networkAddress, walletAddress string) {
 			log.Panic(err.Error())
 		}
 
-		go blockchainNode.handleConnection(conn)
+		go node.handleConnection(conn)
 	}
+}
+
+func NewBlockChainNode(networkAddress, walletAddress string) *P2PNode {
+	localBlockchain := blockchain.InitBlockChain(networkAddress, walletAddress)
+	blockchainNode := P2PNode{
+		Version:        1,
+		NetworkAddress: networkAddress,
+		Blockchain:     localBlockchain,
+	}
+	return &blockchainNode
 }

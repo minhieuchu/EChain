@@ -13,7 +13,6 @@ import (
 type BlockChain struct {
 	DataBase *leveldb.DB
 	LastHash []byte
-	Height   int
 }
 
 type BlockChainIterator struct {
@@ -31,7 +30,7 @@ func InitBlockChain(networkAddress, walletAddress string) *BlockChain {
 	}
 
 	genesisBlock := Genesis()
-	blockchain := BlockChain{db, genesisBlock.Hash, 1}
+	blockchain := BlockChain{db, genesisBlock.Hash}
 	blockchain.StoreNewBlock(genesisBlock)
 
 	utxoSet := blockchain.UTXOSet()
@@ -47,7 +46,17 @@ func (chainIterator *BlockChainIterator) CurrentBlock() *Block {
 }
 
 func (blockchain *BlockChain) GetHeight() int {
-	return blockchain.Height
+	chainIterator := BlockChainIterator{blockchain.DataBase, blockchain.LastHash}
+	height := 0
+	for {
+		currentBlock := chainIterator.CurrentBlock()
+		height++
+		if len(currentBlock.PrevHash) == 0 {
+			break
+		}
+		chainIterator.CurrentHash = currentBlock.PrevHash
+	}
+	return height
 }
 
 func (blockchain *BlockChain) UTXOSet() UTXOSet {
@@ -114,7 +123,6 @@ func (blockchain *BlockChain) AddBlock(transactions []*Transaction) error {
 	}
 	newBlock.Mine()
 	blockchain.StoreNewBlock(&newBlock)
-	blockchain.Height += 1
 	return nil
 }
 
