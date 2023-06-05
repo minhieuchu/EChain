@@ -158,9 +158,9 @@ func (node *P2PNode) handleInvMsg(msg []byte) {
 		}(peerAddr)
 	}
 	wg.Wait()
-	// for _, peerAddr := range node.connectedPeers {
-	// 	node.sendGetBlocksMsg(peerAddr)
-	// }
+	for _, peerAddr := range node.connectedPeers {
+		node.sendGetBlocksMsg(peerAddr)
+	}
 }
 
 func (node *P2PNode) handleBlockdataMsg(msg []byte) {

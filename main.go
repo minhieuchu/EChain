@@ -9,7 +9,10 @@ import (
 	"time"
 )
 
-const NETWORK_NODES_NUM = 3
+const (
+	NETWORK_NODES_NUM  = 1
+	FULLNODE_BLOCK_NUM = 100
+)
 
 func main() {
 	// ======= Init =======
@@ -28,7 +31,7 @@ func main() {
 		go func() {
 			defer wg.Done()
 			blockchainNode = network.NewBlockChainNode("127.0.0.1:"+fmt.Sprint(portNumber), walletAddress)
-			for i := 0; i < 20; i++ {
+			for i := 0; i < FULLNODE_BLOCK_NUM; i++ {
 				var block blockchain.Block
 				lastHash, _ := blockchainNode.Blockchain.DataBase.Get([]byte(blockchain.LAST_HASH_STOGAGE_KEY), nil)
 				block.PrevHash = lastHash
