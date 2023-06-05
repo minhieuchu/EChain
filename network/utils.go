@@ -3,13 +3,30 @@ package network
 import (
 	"bytes"
 	"encoding/gob"
+	"fmt"
+	"io"
 	"log"
 	"net"
 )
 
+func sendMessageBlocking(toAddress string, msg []byte) {
+	conn, err := net.Dial(protocol, toAddress)
+	if err != nil {
+		fmt.Println("can not connect to", toAddress)
+		return
+	}
+	conn.Write(msg)
+	conn.(*net.TCPConn).CloseWrite()
+	io.ReadAll(conn)
+	conn.Close()
+}
+
 func sendMessage(toAddress string, msg []byte) {
 	conn, err := net.Dial(protocol, toAddress)
-	handleError(err)
+	if err != nil {
+		fmt.Println("can not connect to", toAddress)
+		return
+	}
 	conn.Write(msg)
 	conn.(*net.TCPConn).CloseWrite()
 	conn.Close()

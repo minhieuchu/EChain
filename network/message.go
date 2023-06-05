@@ -2,35 +2,37 @@ package network
 
 import "EChain/blockchain"
 
-type versionMessage struct {
+type VersionMessage struct {
 	Version    int
 	AddrYou    string
 	AddrMe     string
 	BestHeight int
 }
 
-type verackMessage struct {
+type VerackMessage struct {
 	AddrFrom string
 }
 
-type addrMessage struct {
+type AddrMessage struct {
 	Address string
 }
 
-type getblocksMessage struct {
+type GetblocksMessage struct {
 	TopBlockHash []byte
 	AddrFrom     string
 }
 
-type invMessage struct {
+type InvMessage struct {
 	HashList [][]byte
 }
 
-type getdataMessage struct {
+type GetdataMessage struct {
+	Index    int
 	HashList [][]byte
 	AddrFrom string
 }
 
-type blockdataMessage struct {
+type BlockdataMessage struct {
+	Index     int
 	BlockList []*blockchain.Block
 }

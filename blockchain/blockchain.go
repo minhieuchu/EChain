@@ -68,6 +68,7 @@ func (blockchain *BlockChain) SetBlock(block *Block) {
 }
 
 func (blockchain *BlockChain) SetLastHash(hash []byte) {
+	blockchain.LastHash = hash
 	blockchain.DataBase.Put([]byte(LAST_HASH_STOGAGE_KEY), hash, nil)
 }
 
