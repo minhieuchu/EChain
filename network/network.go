@@ -158,6 +158,9 @@ func (node *P2PNode) handleInvMsg(msg []byte) {
 		}(peerAddr)
 	}
 	wg.Wait()
+	time.Sleep(3 * time.Second) // Wait for all blockdata messages to be processed
+	utxoSet := node.Blockchain.UTXOSet()
+	utxoSet.ReIndex()
 	for _, peerAddr := range node.connectedPeers {
 		node.sendGetBlocksMsg(peerAddr)
 	}
