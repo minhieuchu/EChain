@@ -1,5 +1,7 @@
 package network
 
+import "EChain/blockchain"
+
 type versionMessage struct {
 	Version    int
 	AddrYou    string
@@ -27,4 +29,8 @@ type invMessage struct {
 type getdataMessage struct {
 	HashList [][]byte
 	AddrFrom string
+}
+
+type blockdataMessage struct {
+	BlockList []*blockchain.Block
 }

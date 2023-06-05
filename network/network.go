@@ -22,6 +22,7 @@ const (
 	GETBLOCKS_MSG = "getblocks"
 	INV_MSG       = "inv"
 	GETDATA_MSG   = "getdata"
+	BLOCKDATA_MSG = "blockdata"
 )
 
 const (
@@ -109,7 +110,7 @@ func (node *P2PNode) handleGetdataMsg(msg []byte) {
 	genericDeserialize(msg, &getdataMsg)
 
 	blockList := node.Blockchain.GetBlocksFromHashes(getdataMsg.HashList)
-	sendMessage(getdataMsg.AddrFrom, serialize(blockList))
+	node.sendBlockdataMessage(getdataMsg.AddrFrom, blockList)
 }
 
 func (node *P2PNode) handleInvMsg(msg []byte) {
@@ -141,32 +142,15 @@ func (node *P2PNode) handleInvMsg(msg []byte) {
 		}
 		go func(toAddress string) {
 			for {
-				isLastMsg := false
 				mutex.Lock()
 				if msgIndex >= msgNum {
 					return
-				} else if msgIndex == msgNum-1 {
-					isLastMsg = true
 				}
 				getdataMsg := getdataMsgList[msgIndex]
 				msgIndex++
 				mutex.Unlock()
 
-				sentData := append(msgTypeToBytes(GETDATA_MSG), serialize(getdataMsg)...)
-				conn, _ := net.Dial(protocol, toAddress)
-				conn.Write(sentData)
-				defer conn.Close()
-
-				response, _ := io.ReadAll(conn)
-				var blockList []*blockchain.Block
-				genericDeserialize(response, &blockList)
-
-				for _, block := range blockList {
-					node.Blockchain.SetBlock(block)
-				}
-				if isLastMsg {
-					node.Blockchain.SetLastHash(blockList[len(blockList)-1].Hash)
-				}
+				node.sendGetdataMessage(toAddress, &getdataMsg)
 				wg.Done()
 			}
 		}(peerAddr)
@@ -174,6 +158,14 @@ func (node *P2PNode) handleInvMsg(msg []byte) {
 	wg.Wait()
 	for _, peerAddr := range node.ConnectedPeers {
 		node.sendGetBlocksMsg(peerAddr)
+	}
+}
+
+func (node *P2PNode) handleBlockdataMsg(msg []byte) {
+	var datablockMsg blockdataMessage
+	genericDeserialize(msg, &datablockMsg)
+	for _, block := range datablockMsg.BlockList {
+		node.Blockchain.SetBlock(block)
 	}
 }
 
@@ -197,12 +189,26 @@ func (node *P2PNode) handleConnection(conn net.Conn) {
 		node.handleInvMsg(payload)
 	case GETDATA_MSG:
 		node.handleGetdataMsg(payload)
+	case BLOCKDATA_MSG:
+		node.handleBlockdataMsg(payload)
 	default:
 		fmt.Println("invalid message")
 	}
 }
 
 // ======= Send messages =======
+
+func (node *P2PNode) sendGetdataMessage(toAddress string, getdataMsg *getdataMessage) {
+	fmt.Println("Send Getdata msg from", node.NetworkAddress, "to", toAddress)
+	sentData := append(msgTypeToBytes(GETDATA_MSG), serialize(getdataMsg)...)
+	sendMessage(toAddress, sentData)
+}
+
+func (node *P2PNode) sendBlockdataMessage(toAddress string, blockList []*blockchain.Block) {
+	fmt.Println("Send Blockdata msg from", node.NetworkAddress, "to", toAddress)
+	sentData := append(msgTypeToBytes(BLOCKDATA_MSG), serialize(blockdataMessage{blockList})...)
+	sendMessage(toAddress, sentData)
+}
 
 func (node *P2PNode) sendInvMessage(toAddress string, invMsg *invMessage) {
 	fmt.Println("Send Inv msg from", node.NetworkAddress, "to", toAddress)
