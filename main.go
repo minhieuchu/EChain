@@ -13,17 +13,11 @@ const (
 	FULLNODE_BLOCK_NUM = 50
 )
 
-const (
-	FULLNODE = "fullnode"
-	SPV      = "spv"
-	MINER    = "miner"
-)
-
 func main() {
 	networkAddress := os.Args[1]
 	nodeType := os.Args[2]
-	blockchainNode := network.NewBlockChainNode(networkAddress, "15Hgpfs67bXWcFPHxF4mCjSbtXXMwbttge")
-	if nodeType == FULLNODE {
+	blockchainNode := network.NewBlockChainNode(nodeType, networkAddress, "15Hgpfs67bXWcFPHxF4mCjSbtXXMwbttge")
+	if nodeType == network.FULLNODE || nodeType == network.MINER {
 		for i := 0; i < FULLNODE_BLOCK_NUM; i++ {
 			var block blockchain.Block
 			lastHash, _ := blockchainNode.Blockchain.DataBase.Get([]byte(blockchain.LAST_HASH_STOGAGE_KEY), nil)

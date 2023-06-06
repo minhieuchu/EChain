@@ -26,12 +26,19 @@ const (
 )
 
 const (
+	FULLNODE = "fullnode"
+	SPV      = "spv"
+	MINER    = "miner"
+)
+
+const (
 	protocol                       = "tcp"
 	msgTypeLength                  = 12 // First 12 bytes of each byte slice exchanged between peers are reserved for message type
 	MAX_BLOCKS_IN_TRANSIT_PER_PEER = 10
 )
 
 type P2PNode struct {
+	NodeType            string
 	Version             int
 	NetworkAddress      string
 	Blockchain          *blockchain.BlockChain
@@ -280,9 +287,10 @@ func (node *P2PNode) StartP2PNode() {
 	}
 }
 
-func NewBlockChainNode(networkAddress, walletAddress string) *P2PNode {
+func NewBlockChainNode(nodeType, networkAddress, walletAddress string) *P2PNode {
 	localBlockchain := blockchain.InitBlockChain(networkAddress, walletAddress)
 	blockchainNode := P2PNode{
+		NodeType:       nodeType,
 		Version:        1,
 		NetworkAddress: networkAddress,
 		Blockchain:     localBlockchain,
