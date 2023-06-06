@@ -13,7 +13,7 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-var initialPeers = []string{"127.0.0.1:8333", "127.0.0.1:8334", "127.0.0.1:8335"}
+var initialPeers = []string{"localhost:8333", "localhost:8334", "localhost:8335"}
 
 const (
 	VERSION_MSG   = "version"
