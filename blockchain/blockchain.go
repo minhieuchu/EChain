@@ -46,17 +46,9 @@ func (chainIterator *BlockChainIterator) CurrentBlock() *Block {
 }
 
 func (blockchain *BlockChain) GetHeight() int {
-	chainIterator := BlockChainIterator{blockchain.DataBase, blockchain.LastHash}
-	height := 0
-	for {
-		currentBlock := chainIterator.CurrentBlock()
-		height++
-		if len(currentBlock.PrevHash) == 0 {
-			break
-		}
-		chainIterator.CurrentHash = currentBlock.PrevHash
-	}
-	return height
+	encodedBlock, _ := blockchain.DataBase.Get(blockchain.LastHash, nil)
+	lastBlock := DeserializeBlock(encodedBlock)
+	return lastBlock.Height
 }
 
 func (blockchain *BlockChain) UTXOSet() UTXOSet {
@@ -117,10 +109,13 @@ func (blockchain *BlockChain) AddBlock(transactions []*Transaction) error {
 		}
 	}
 	coinbaseTransaction := CoinBaseTransaction(WALLET_ADDRESS)
+	encodedBlock, _ := blockchain.DataBase.Get(blockchain.LastHash, nil)
+	lastBlock := DeserializeBlock(encodedBlock)
 	newBlock := Block{
 		Transactions: append([]*Transaction{coinbaseTransaction}, transactions...),
 		Timestamp:    time.Now().String(),
 		PrevHash:     blockchain.LastHash,
+		Height:       lastBlock.Height + 1,
 	}
 	newBlock.Mine()
 	blockchain.StoreNewBlock(&newBlock)

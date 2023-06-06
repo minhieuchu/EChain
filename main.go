@@ -35,6 +35,7 @@ func main() {
 				var block blockchain.Block
 				lastHash, _ := blockchainNode.Blockchain.DataBase.Get([]byte(blockchain.LAST_HASH_STOGAGE_KEY), nil)
 				block.PrevHash = lastHash
+				block.Height = i + 1
 				block.Mine()
 				blockchainNode.Blockchain.StoreNewBlock(&block)
 			}

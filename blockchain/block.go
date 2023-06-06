@@ -17,6 +17,7 @@ type Block struct {
 	PrevHash     []byte
 	Hash         []byte
 	Nonce        int
+	Height       int
 }
 
 func (block *Block) Mine() {
@@ -51,8 +52,8 @@ func Genesis() *Block {
 	genesisBlockDate, _ := time.Parse("2006-Jan-02", "2009-Jan-03")
 	txOutput := createTxnOutput(COINBASE_REWARD, satoshiAddress)
 	coinbaseTransaction := Transaction{
-		Inputs:  []TxInput{},
-		Outputs: []TxOutput{txOutput},
+		Inputs:   []TxInput{},
+		Outputs:  []TxOutput{txOutput},
 		Locktime: genesisBlockDate.UnixMilli(),
 	}
 	coinbaseTransaction.SetHash()
