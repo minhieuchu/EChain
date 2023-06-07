@@ -10,7 +10,7 @@ import (
 )
 
 func runTest() {
-		// ======= Init =======
+	// ======= Init =======
 
 	wallets := wallet.LoadWallets()
 	addressList := wallets.GetAddresses()
@@ -22,10 +22,9 @@ func runTest() {
 	for i := 0; i < NETWORK_NODES_NUM; i++ {
 		wg.Add(1)
 		portNumber := 8333 + i
-		var blockchainNode *network.P2PNode
 		go func() {
 			defer wg.Done()
-			blockchainNode = network.NewBlockChainNode(network.FULLNODE, "localhost:"+fmt.Sprint(portNumber), walletAddress)
+			blockchainNode := network.NewFullNode("localhost:"+fmt.Sprint(portNumber), walletAddress)
 			for i := 0; i < FULLNODE_BLOCK_NUM; i++ {
 				var block blockchain.Block
 				lastHash, _ := blockchainNode.Blockchain.DataBase.Get([]byte(blockchain.LAST_HASH_STOGAGE_KEY), nil)
@@ -41,7 +40,7 @@ func runTest() {
 		time.Sleep(3 * time.Second)
 		wg.Add(1)
 		defer wg.Done()
-		blockchainNode := network.NewBlockChainNode(network.SPV, "localhost:8888", walletAddress)
+		blockchainNode := network.NewSPVNode("localhost:8888", walletAddress)
 		blockchainNode.StartP2PNode()
 	}()
 	wg.Wait()
