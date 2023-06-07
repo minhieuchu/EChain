@@ -118,7 +118,7 @@ func (node *FullNode) handleBlockdataMsg(msg []byte) {
 		node.Blockchain.SetBlock(block)
 	}
 	if blockdataMsg.Index == node.getdataMessageCount-1 {
-		node.Blockchain.SetLastHash(blockdataMsg.BlockList[len(blockdataMsg.BlockList)-1].Hash)
+		node.Blockchain.SetLastHash(blockdataMsg.BlockList[len(blockdataMsg.BlockList)-1].GetHash())
 	}
 }
 

@@ -30,7 +30,7 @@ func InitBlockChain(networkAddress, walletAddress string) *BlockChain {
 	}
 
 	genesisBlock := Genesis()
-	blockchain := BlockChain{db, genesisBlock.Hash}
+	blockchain := BlockChain{db, genesisBlock.GetHash()}
 	blockchain.StoreNewBlock(genesisBlock)
 
 	utxoSet := blockchain.UTXOSet()
@@ -46,9 +46,17 @@ func (chainIterator *BlockChainIterator) CurrentBlock() *Block {
 }
 
 func (blockchain *BlockChain) GetHeight() int {
-	encodedBlock, _ := blockchain.DataBase.Get(blockchain.LastHash, nil)
-	lastBlock := DeserializeBlock(encodedBlock)
-	return lastBlock.Height
+	chainIterator := BlockChainIterator{blockchain.DataBase, blockchain.LastHash}
+	blockHeight := 0
+	for {
+		currentBlock := chainIterator.CurrentBlock()
+		blockHeight++
+		if len(currentBlock.PrevHash) == 0 {
+			break
+		}
+		chainIterator.CurrentHash = currentBlock.PrevHash
+	}
+	return blockHeight
 }
 
 func (blockchain *BlockChain) UTXOSet() UTXOSet {
@@ -56,7 +64,7 @@ func (blockchain *BlockChain) UTXOSet() UTXOSet {
 }
 
 func (blockchain *BlockChain) SetBlock(block *Block) {
-	blockchain.DataBase.Put(block.Hash, serialize(block), nil)
+	blockchain.DataBase.Put(block.GetHash(), serialize(block), nil)
 }
 
 func (blockchain *BlockChain) SetLastHash(hash []byte) {
@@ -65,9 +73,9 @@ func (blockchain *BlockChain) SetLastHash(hash []byte) {
 }
 
 func (blockchain *BlockChain) StoreNewBlock(block *Block) {
-	blockchain.LastHash = block.Hash
-	blockchain.DataBase.Put(block.Hash, serialize(block), nil)
-	blockchain.DataBase.Put([]byte(LAST_HASH_STOGAGE_KEY), block.Hash, nil)
+	blockchain.LastHash = block.GetHash()
+	blockchain.DataBase.Put(blockchain.LastHash, serialize(block), nil)
+	blockchain.DataBase.Put([]byte(LAST_HASH_STOGAGE_KEY), blockchain.LastHash, nil)
 
 	utxoSet := blockchain.UTXOSet()
 	utxoSet.Update(block)
@@ -109,13 +117,12 @@ func (blockchain *BlockChain) AddBlock(transactions []*Transaction) error {
 		}
 	}
 	coinbaseTransaction := CoinBaseTransaction(WALLET_ADDRESS)
-	encodedBlock, _ := blockchain.DataBase.Get(blockchain.LastHash, nil)
-	lastBlock := DeserializeBlock(encodedBlock)
 	newBlock := Block{
+		BlockHeader: BlockHeader{
+			Timestamp: time.Now().String(),
+			PrevHash:  blockchain.LastHash,
+		},
 		Transactions: append([]*Transaction{coinbaseTransaction}, transactions...),
-		Timestamp:    time.Now().String(),
-		PrevHash:     blockchain.LastHash,
-		Height:       lastBlock.Height + 1,
 	}
 	newBlock.Mine()
 	blockchain.StoreNewBlock(&newBlock)
@@ -173,7 +180,7 @@ func (blockchain *BlockChain) GetUnmatchedBlocks(targetBlockHash []byte) (bool, 
 	for {
 		currentBlock := chainIterator.CurrentBlock()
 
-		if slices.Equal(currentBlock.Hash, targetBlockHash) {
+		if slices.Equal(currentBlock.GetHash(), targetBlockHash) {
 			blockExisted = true
 			break
 		}
@@ -181,7 +188,7 @@ func (blockchain *BlockChain) GetUnmatchedBlocks(targetBlockHash []byte) (bool, 
 		if len(currentBlock.PrevHash) == 0 {
 			break
 		} else {
-			unmatchedBlocks = append(unmatchedBlocks, currentBlock.Hash)
+			unmatchedBlocks = append(unmatchedBlocks, currentBlock.GetHash())
 		}
 		chainIterator.CurrentHash = currentBlock.PrevHash
 	}
