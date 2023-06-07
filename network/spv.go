@@ -16,7 +16,7 @@ type SPVNode struct {
 	BlockChainHeader *blockchain.BlockChainHeader
 }
 
-func NewSPVNode(networkAddress, walletAddress string) *SPVNode {
+func NewSPVNode(networkAddress string) *SPVNode {
 	localBlockchainHeader := blockchain.InitBlockChainHeader(networkAddress)
 	p2pNode := P2PNode{
 		Version:        1,
@@ -50,6 +50,20 @@ func (node *SPVNode) sendVerackMsg(toAddress string) {
 	sendMessage(toAddress, sentData)
 }
 
+func (node *SPVNode) sendGetheadersMsg(toAddress string) {
+	fmt.Println("Send getheaders msg from", node.NetworkAddress, "to", toAddress)
+	lastHeaderHash := node.BlockChainHeader.LastHash
+	getheadersMsg := GetheadersMessage{lastHeaderHash, node.NetworkAddress}
+	sentData := append(msgTypeToBytes(GETHEADERS_MSG), serialize(getheadersMsg)...)
+	sendMessage(toAddress, sentData)
+}
+
+func (node *SPVNode) sendHeaderMessage(toAddress string, headerMsg *HeaderMessage) {
+	fmt.Println("Send Headers msg from", node.NetworkAddress, "to", toAddress)
+	sentData := append(msgTypeToBytes(HEADERS_MSG), serialize(headerMsg)...)
+	sendMessage(toAddress, sentData)
+}
+
 func (node *SPVNode) handleConnection(conn net.Conn) {
 	data, err := io.ReadAll(conn)
 	defer conn.Close()
@@ -64,8 +78,31 @@ func (node *SPVNode) handleConnection(conn net.Conn) {
 		node.handleVerackMsg(payload)
 	case ADDR_MSG:
 		node.handleAddrMsg(payload)
+	case GETHEADERS_MSG:
+		node.handleGetheadersMsg(payload)
 	default:
 		fmt.Println("invalid message")
+	}
+}
+
+func (node *SPVNode) handleGetheadersMsg(msg []byte) {
+	var getheadersMsg GetheadersMessage
+	genericDeserialize(msg, &getheadersMsg)
+
+	remoteLastHeaderHash := getheadersMsg.TopHeaderHash
+	headerExisted, unmatchedHeaders := node.BlockChainHeader.GetUnmatchedHeaders(remoteLastHeaderHash)
+	if headerExisted && len(unmatchedHeaders) > 0 {
+		headerHashesToSend := [][]byte{}
+		for i := len(unmatchedHeaders) - 1; i >= 0; i-- {
+			headerHashesToSend = append(headerHashesToSend, unmatchedHeaders[i])
+			if len(headerHashesToSend) >= 2000 {
+				break
+			}
+		}
+		headerMsg := HeaderMessage{headerHashesToSend}
+		node.sendHeaderMessage(getheadersMsg.AddrFrom, &headerMsg)
+	} else if !headerExisted {
+		node.sendGetheadersMsg(getheadersMsg.AddrFrom)
 	}
 }
 
@@ -90,7 +127,7 @@ func (node *SPVNode) handleVerackMsg(msg []byte) {
 	}
 	node.connectedPeers = append(node.connectedPeers, verackMsg.AddrFrom)
 	node.sendAddrMsg(verackMsg.AddrFrom)
-	// node.sendGetBlocksMsg(verackMsg.AddrFrom)
+	node.sendGetheadersMsg(verackMsg.AddrFrom)
 }
 
 func (node *SPVNode) handleAddrMsg(msg []byte) {
@@ -116,7 +153,8 @@ func (node *SPVNode) StartP2PNode() {
 	fmt.Println(" ===== Starting blockchain node at", node.NetworkAddress, "=====")
 	ln, err := net.Listen(protocol, node.NetworkAddress)
 	if err != nil {
-		log.Fatal("can not start server at", node.NetworkAddress)
+		fmt.Println("can not start server at", node.NetworkAddress)
+		return
 	}
 
 	go func() {

@@ -7,13 +7,15 @@ import (
 var initialPeers = []string{"localhost:8333", "localhost:8334", "localhost:8335"}
 
 const (
-	VERSION_MSG   = "version"
-	VERACK_MSG    = "verack"
-	ADDR_MSG      = "addr"
-	GETBLOCKS_MSG = "getblocks"
-	INV_MSG       = "inv"
-	GETDATA_MSG   = "getdata"
-	BLOCKDATA_MSG = "blockdata"
+	VERSION_MSG    = "version"
+	VERACK_MSG     = "verack"
+	ADDR_MSG       = "addr"
+	GETBLOCKS_MSG  = "getblocks"
+	INV_MSG        = "inv"
+	HEADERS_MSG    = "headers"
+	GETDATA_MSG    = "getdata"
+	GETHEADERS_MSG = "getheaders"
+	BLOCKDATA_MSG  = "blockdata"
 )
 
 const (

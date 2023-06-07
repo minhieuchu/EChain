@@ -43,7 +43,7 @@ func (block *Block) GetHash() []byte {
 	return secondHash[:]
 }
 
-func Genesis() *Block {
+func GenerateGenesisBlock() *Block {
 	err := godotenv.Load()
 	handleErr(err)
 

@@ -35,7 +35,7 @@ func InitBlockChain(networkAddress, walletAddress string) *BlockChain {
 		log.Fatal(err)
 	}
 
-	genesisBlock := Genesis()
+	genesisBlock := GenerateGenesisBlock()
 	blockchain := BlockChain{db, genesisBlock.GetHash()}
 	blockchain.StoreNewBlock(genesisBlock)
 
@@ -54,7 +54,7 @@ func InitBlockChainHeader(networkAddress string) *BlockChainHeader {
 	blockchainHeader := BlockChainHeader{
 		DataBase: db,
 	}
-	genesisBlock := Genesis()
+	genesisBlock := GenerateGenesisBlock()
 	blockchainHeader.LastHash = genesisBlock.GetHash()
 	blockchainHeader.DataBase.Put(blockchainHeader.LastHash, serialize(genesisBlock.BlockHeader), nil)
 	blockchainHeader.DataBase.Put([]byte(LAST_HASH_STOGAGE_KEY), blockchainHeader.LastHash, nil)
@@ -80,6 +80,32 @@ func (blockchainHeader *BlockChainHeader) GetHeight() int {
 		currentHash = header.PrevHash
 	}
 	return height
+}
+
+func (blockchainHeader *BlockChainHeader) GetUnmatchedHeaders(targetHeaderHash []byte) (bool, [][]byte) {
+	headerExisted := false
+	unmatchedHeaders := make([][]byte, 0)
+	currentHash := blockchainHeader.LastHash
+
+	for {
+		encodedData, _ := blockchainHeader.DataBase.Get(currentHash, nil)
+		var currentHeader BlockHeader
+		genericDeserialize(encodedData, &currentHeader)
+
+		if slices.Equal(currentHash, targetHeaderHash) {
+			headerExisted = true
+			break
+		}
+
+		if len(currentHeader.PrevHash) == 0 {
+			break
+		} else {
+			unmatchedHeaders = append(unmatchedHeaders, currentHash)
+		}
+		currentHash = currentHeader.PrevHash
+	}
+
+	return headerExisted, unmatchedHeaders
 }
 
 func (blockchain *BlockChain) GetHeight() int {

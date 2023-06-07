@@ -21,7 +21,7 @@ func main() {
 		minerNode := network.NewMinerNode(networkAddress, "15Hgpfs67bXWcFPHxF4mCjSbtXXMwbttge")
 		minerNode.StartP2PNode()
 	} else if nodeType == network.SPV {
-		spvNode := network.NewSPVNode(networkAddress, "15Hgpfs67bXWcFPHxF4mCjSbtXXMwbttge")
+		spvNode := network.NewSPVNode(networkAddress)
 		spvNode.StartP2PNode()
 	}
 }

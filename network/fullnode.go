@@ -51,6 +51,25 @@ func (node *FullNode) handleGetblocksMsg(msg []byte) {
 	}
 }
 
+func (node *FullNode) handleGetheadersMsg(msg []byte) {
+	var getheadersMsg GetheadersMessage
+	genericDeserialize(msg, &getheadersMsg)
+
+	remoteLastHeaderHash := getheadersMsg.TopHeaderHash
+	headerExisted, unmatchedHeaders := node.Blockchain.GetUnmatchedBlocks(remoteLastHeaderHash)
+	if headerExisted && len(unmatchedHeaders) > 0 {
+		headerHashesToSend := [][]byte{}
+		for i := len(unmatchedHeaders) - 1; i >= 0; i-- {
+			headerHashesToSend = append(headerHashesToSend, unmatchedHeaders[i])
+			if len(headerHashesToSend) >= 2000 {
+				break
+			}
+		}
+		headerMsg := HeaderMessage{headerHashesToSend}
+		node.sendHeaderMessage(getheadersMsg.AddrFrom, &headerMsg)
+	}
+}
+
 func (node *FullNode) handleGetdataMsg(msg []byte) {
 	var getdataMsg GetdataMessage
 	genericDeserialize(msg, &getdataMsg)
@@ -156,6 +175,12 @@ func (node *FullNode) sendInvMessage(toAddress string, invMsg *InvMessage) {
 	sendMessage(toAddress, sentData)
 }
 
+func (node *FullNode) sendHeaderMessage(toAddress string, headerMsg *HeaderMessage) {
+	fmt.Println("Send Headers msg from", node.NetworkAddress, "to", toAddress)
+	sentData := append(msgTypeToBytes(HEADERS_MSG), serialize(headerMsg)...)
+	sendMessage(toAddress, sentData)
+}
+
 // ======= Handle requests =======
 
 func (node *FullNode) handleVersionMsg(msg []byte) {
@@ -223,6 +248,8 @@ func (node *FullNode) handleConnection(conn net.Conn) {
 		node.handleGetdataMsg(payload)
 	case BLOCKDATA_MSG:
 		node.handleBlockdataMsg(payload)
+	case GETHEADERS_MSG:
+		node.handleGetheadersMsg(payload)
 	default:
 		fmt.Println("invalid message")
 	}
