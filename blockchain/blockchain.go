@@ -62,9 +62,24 @@ func InitBlockChainHeader(networkAddress string) *BlockChainHeader {
 }
 
 func (chainIterator *BlockChainIterator) CurrentBlock() *Block {
-	encodedBlock, err := chainIterator.DataBase.Get(chainIterator.CurrentHash, nil)
-	handleErr(err)
+	encodedBlock, _ := chainIterator.DataBase.Get(chainIterator.CurrentHash, nil)
 	return DeserializeBlock(encodedBlock)
+}
+
+func (blockchainHeader *BlockChainHeader) GetHeight() int {
+	currentHash := blockchainHeader.LastHash
+	height := 0
+	for {
+		encodedData, _ := blockchainHeader.DataBase.Get(currentHash, nil)
+		var header BlockHeader
+		genericDeserialize(encodedData, &header)
+		height++
+		if len(header.PrevHash) == 0 {
+			break
+		}
+		currentHash = header.PrevHash
+	}
+	return height
 }
 
 func (blockchain *BlockChain) GetHeight() int {

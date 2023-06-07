@@ -37,9 +37,7 @@ func (node *SPVNode) sendAddrMsg(toAddress string) {
 
 func (node *SPVNode) sendVersionMsg(toAddress string) {
 	fmt.Println("Send Version msg from", node.NetworkAddress, "to", toAddress)
-	// Todo:
-	// nBestHeight := node.BlockHeaders.GetHeight()
-	nBestHeight := 1
+	nBestHeight := node.BlockChainHeader.GetHeight()
 	versionMsg := VersionMessage{node.Version, toAddress, node.NetworkAddress, nBestHeight}
 	sentData := append(msgTypeToBytes(VERSION_MSG), serialize(versionMsg)...)
 	sendMessage(toAddress, sentData)
