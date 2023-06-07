@@ -39,7 +39,7 @@ func runTest() {
 		time.Sleep(3 * time.Second)
 		wg.Add(1)
 		defer wg.Done()
-		blockchainNode := network.NewSPVNode("localhost:8888", walletAddress)
+		blockchainNode := network.NewSPVNode("localhost:8888")
 		blockchainNode.StartP2PNode()
 	}()
 	wg.Wait()
