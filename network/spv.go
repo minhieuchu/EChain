@@ -1,6 +1,7 @@
 package network
 
 import (
+	"EChain/blockchain"
 	"fmt"
 	"io"
 	"log"
@@ -12,15 +13,19 @@ import (
 
 type SPVNode struct {
 	P2PNode
-	BlockHeaders []any
+	BlockChainHeader *blockchain.BlockChainHeader
 }
 
 func NewSPVNode(networkAddress, walletAddress string) *SPVNode {
+	localBlockchainHeader := blockchain.InitBlockChainHeader(networkAddress)
 	p2pNode := P2PNode{
 		Version:        1,
 		NetworkAddress: networkAddress,
 	}
-	return &SPVNode{P2PNode: p2pNode}
+	return &SPVNode{
+		P2PNode:          p2pNode,
+		BlockChainHeader: localBlockchainHeader,
+	}
 }
 
 func (node *SPVNode) sendAddrMsg(toAddress string) {

@@ -3,6 +3,7 @@ package blockchain
 import (
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -11,6 +12,11 @@ import (
 )
 
 type BlockChain struct {
+	DataBase *leveldb.DB
+	LastHash []byte
+}
+
+type BlockChainHeader struct {
 	DataBase *leveldb.DB
 	LastHash []byte
 }
@@ -37,6 +43,22 @@ func InitBlockChain(networkAddress, walletAddress string) *BlockChain {
 	utxoSet.ReIndex()
 
 	return &blockchain
+}
+
+func InitBlockChainHeader(networkAddress string) *BlockChainHeader {
+	db, err := leveldb.OpenFile("storage/"+networkAddress, nil)
+	if err != nil {
+		fmt.Println("can not start database at", networkAddress)
+		return nil
+	}
+	blockchainHeader := BlockChainHeader{
+		DataBase: db,
+	}
+	genesisBlock := Genesis()
+	blockchainHeader.LastHash = genesisBlock.GetHash()
+	blockchainHeader.DataBase.Put(blockchainHeader.LastHash, serialize(genesisBlock.BlockHeader), nil)
+	blockchainHeader.DataBase.Put([]byte(LAST_HASH_STOGAGE_KEY), blockchainHeader.LastHash, nil)
+	return &blockchainHeader
 }
 
 func (chainIterator *BlockChainIterator) CurrentBlock() *Block {
