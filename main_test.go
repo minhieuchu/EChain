@@ -6,25 +6,21 @@ import (
 	"EChain/wallet"
 	"fmt"
 	"sync"
+	"testing"
 	"time"
 )
 
-func runTest() {
-	// ======= Init =======
-
+func TestBlockHeaderHeightSPVNode( t *testing.T) {
 	wallets := wallet.LoadWallets()
 	addressList := wallets.GetAddresses()
-	walletAddress := addressList[0] // miner node's wallet address
-
-	// ======= Testing =======
+	var blockHeaderHeight int
 
 	var wg sync.WaitGroup
 	for i := 0; i < NETWORK_NODES_NUM; i++ {
 		wg.Add(1)
 		portNumber := 8333 + i
 		go func() {
-			defer wg.Done()
-			fullnode := network.NewFullNode("localhost:"+fmt.Sprint(portNumber), walletAddress)
+			fullnode := network.NewFullNode("localhost:"+fmt.Sprint(portNumber), addressList[0])
 			for i := 0; i < FULLNODE_BLOCK_NUM; i++ {
 				var block blockchain.Block
 				lastHash, _ := fullnode.Blockchain.DataBase.Get([]byte(blockchain.LAST_HASH_STOGAGE_KEY), nil)
@@ -32,15 +28,27 @@ func runTest() {
 				block.Mine()
 				fullnode.Blockchain.StoreNewBlock(&block)
 			}
+			go func() {
+				time.Sleep(5 * time.Second) // wait for SPV node to finish synchronizing block headers
+				wg.Done()
+			}()
 			fullnode.StartP2PNode()
 		}()
 	}
 	go func() {
-		time.Sleep(3 * time.Second)
+		time.Sleep(3 * time.Second) // Wait for fullnode to finish building blocks (including mining time for each block)
 		wg.Add(1)
-		defer wg.Done()
 		spvNode := network.NewSPVNode("localhost:8888")
+		go func() {
+			time.Sleep(3 * time.Second)
+			blockHeaderHeight = spvNode.BlockChainHeader.GetHeight()
+			wg.Done()
+		}()
 		spvNode.StartP2PNode()
 	}()
 	wg.Wait()
+
+	if blockHeaderHeight != FULLNODE_BLOCK_NUM + 1 {
+		t.Fatalf("Expected SPV header's length to be %d", FULLNODE_BLOCK_NUM + 1)
+	}
 }
