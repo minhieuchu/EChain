@@ -82,9 +82,18 @@ func (blockchainHeader *BlockChainHeader) GetHeight() int {
 	return height
 }
 
-func (blockchainHeader *BlockChainHeader) GetUnmatchedHeaders(targetHeaderHash []byte) (bool, [][]byte) {
+func (blockchainHeader *BlockChainHeader) SetHeader(header *BlockHeader) {
+	blockchainHeader.DataBase.Put(header.GetHash(), serialize(header), nil)
+}
+
+func (blockchainHeader *BlockChainHeader) SetLastHash(lastHash []byte) {
+	blockchainHeader.LastHash = lastHash
+	blockchainHeader.DataBase.Put([]byte(LAST_HASH_STOGAGE_KEY), lastHash, nil)
+}
+
+func (blockchainHeader *BlockChainHeader) GetUnmatchedHeaders(targetHeaderHash []byte) (bool, []*BlockHeader) {
 	headerExisted := false
-	unmatchedHeaders := make([][]byte, 0)
+	unmatchedHeaders := make([]*BlockHeader, 0)
 	currentHash := blockchainHeader.LastHash
 
 	for {
@@ -100,7 +109,7 @@ func (blockchainHeader *BlockChainHeader) GetUnmatchedHeaders(targetHeaderHash [
 		if len(currentHeader.PrevHash) == 0 {
 			break
 		} else {
-			unmatchedHeaders = append(unmatchedHeaders, currentHash)
+			unmatchedHeaders = append(unmatchedHeaders, &currentHeader)
 		}
 		currentHash = currentHeader.PrevHash
 	}
@@ -257,6 +266,30 @@ func (blockchain *BlockChain) GetUnmatchedBlocks(targetBlockHash []byte) (bool, 
 	}
 
 	return blockExisted, unmatchedBlocks
+}
+
+func (blockchain *BlockChain) GetUnmatchedHeaders(targetHeaderHash []byte) (bool, []*BlockHeader) {
+	headerExisted := false
+	unmatchedHeaders := make([]*BlockHeader, 0)
+	chainIterator := BlockChainIterator{blockchain.DataBase, blockchain.LastHash}
+
+	for {
+		currentBlock := chainIterator.CurrentBlock()
+
+		if slices.Equal(currentBlock.GetHash(), targetHeaderHash) {
+			headerExisted = true
+			break
+		}
+
+		if len(currentBlock.PrevHash) == 0 {
+			break
+		} else {
+			unmatchedHeaders = append(unmatchedHeaders, &currentBlock.BlockHeader)
+		}
+		chainIterator.CurrentHash = currentBlock.PrevHash
+	}
+
+	return headerExisted, unmatchedHeaders
 }
 
 func (blockchain *BlockChain) GetBlocksFromHashes(hashList [][]byte) []*Block {

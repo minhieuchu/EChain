@@ -51,7 +51,7 @@ func (node *SPVNode) sendVerackMsg(toAddress string) {
 }
 
 func (node *SPVNode) sendGetheadersMsg(toAddress string) {
-	fmt.Println("Send getheaders msg from", node.NetworkAddress, "to", toAddress)
+	fmt.Println("Send Getheaders msg from", node.NetworkAddress, "to", toAddress)
 	lastHeaderHash := node.BlockChainHeader.LastHash
 	getheadersMsg := GetheadersMessage{lastHeaderHash, node.NetworkAddress}
 	sentData := append(msgTypeToBytes(GETHEADERS_MSG), serialize(getheadersMsg)...)
@@ -80,9 +80,21 @@ func (node *SPVNode) handleConnection(conn net.Conn) {
 		node.handleAddrMsg(payload)
 	case GETHEADERS_MSG:
 		node.handleGetheadersMsg(payload)
+	case HEADERS_MSG:
+		node.handleHeadersMsg(payload)
 	default:
 		fmt.Println("invalid message")
 	}
+}
+
+func (node *SPVNode) handleHeadersMsg(msg []byte) {
+	var headerMsg HeaderMessage
+	genericDeserialize(msg, &headerMsg)
+
+	for _, header := range headerMsg.HeaderList {
+		node.BlockChainHeader.SetHeader(header)
+	}
+	node.BlockChainHeader.SetLastHash(headerMsg.HeaderList[len(headerMsg.HeaderList)-1].GetHash())
 }
 
 func (node *SPVNode) handleGetheadersMsg(msg []byte) {
@@ -92,14 +104,14 @@ func (node *SPVNode) handleGetheadersMsg(msg []byte) {
 	remoteLastHeaderHash := getheadersMsg.TopHeaderHash
 	headerExisted, unmatchedHeaders := node.BlockChainHeader.GetUnmatchedHeaders(remoteLastHeaderHash)
 	if headerExisted && len(unmatchedHeaders) > 0 {
-		headerHashesToSend := [][]byte{}
+		headerList := []*blockchain.BlockHeader{}
 		for i := len(unmatchedHeaders) - 1; i >= 0; i-- {
-			headerHashesToSend = append(headerHashesToSend, unmatchedHeaders[i])
-			if len(headerHashesToSend) >= 2000 {
+			headerList = append(headerList, unmatchedHeaders[i])
+			if len(headerList) >= 2000 {
 				break
 			}
 		}
-		headerMsg := HeaderMessage{headerHashesToSend}
+		headerMsg := HeaderMessage{headerList}
 		node.sendHeaderMessage(getheadersMsg.AddrFrom, &headerMsg)
 	} else if !headerExisted {
 		node.sendGetheadersMsg(getheadersMsg.AddrFrom)

@@ -56,16 +56,16 @@ func (node *FullNode) handleGetheadersMsg(msg []byte) {
 	genericDeserialize(msg, &getheadersMsg)
 
 	remoteLastHeaderHash := getheadersMsg.TopHeaderHash
-	headerExisted, unmatchedHeaders := node.Blockchain.GetUnmatchedBlocks(remoteLastHeaderHash)
+	headerExisted, unmatchedHeaders := node.Blockchain.GetUnmatchedHeaders(remoteLastHeaderHash)
 	if headerExisted && len(unmatchedHeaders) > 0 {
-		headerHashesToSend := [][]byte{}
+		headerList := []*blockchain.BlockHeader{}
 		for i := len(unmatchedHeaders) - 1; i >= 0; i-- {
-			headerHashesToSend = append(headerHashesToSend, unmatchedHeaders[i])
-			if len(headerHashesToSend) >= 2000 {
+			headerList = append(headerList, unmatchedHeaders[i])
+			if len(headerList) >= 2000 {
 				break
 			}
 		}
-		headerMsg := HeaderMessage{headerHashesToSend}
+		headerMsg := HeaderMessage{headerList}
 		node.sendHeaderMessage(getheadersMsg.AddrFrom, &headerMsg)
 	}
 }

@@ -37,10 +37,14 @@ func (block *Block) Mine() {
 	}
 }
 
-func (block *Block) GetHash() []byte {
-	firstHash := sha256.Sum256(serialize(block.BlockHeader))
+func (blockHeader *BlockHeader) GetHash() []byte {
+	firstHash := sha256.Sum256(serialize(blockHeader))
 	secondHash := sha256.Sum256(firstHash[:])
 	return secondHash[:]
+}
+
+func (block *Block) GetHash() []byte {
+	return block.BlockHeader.GetHash()
 }
 
 func GenerateGenesisBlock() *Block {

@@ -16,6 +16,7 @@ const (
 	GETDATA_MSG    = "getdata"
 	GETHEADERS_MSG = "getheaders"
 	BLOCKDATA_MSG  = "blockdata"
+	HEADERDATA_MSG = "headerdata"
 )
 
 const (

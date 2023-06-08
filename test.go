@@ -24,23 +24,23 @@ func runTest() {
 		portNumber := 8333 + i
 		go func() {
 			defer wg.Done()
-			blockchainNode := network.NewFullNode("localhost:"+fmt.Sprint(portNumber), walletAddress)
+			fullnode := network.NewFullNode("localhost:"+fmt.Sprint(portNumber), walletAddress)
 			for i := 0; i < FULLNODE_BLOCK_NUM; i++ {
 				var block blockchain.Block
-				lastHash, _ := blockchainNode.Blockchain.DataBase.Get([]byte(blockchain.LAST_HASH_STOGAGE_KEY), nil)
+				lastHash, _ := fullnode.Blockchain.DataBase.Get([]byte(blockchain.LAST_HASH_STOGAGE_KEY), nil)
 				block.PrevHash = lastHash
 				block.Mine()
-				blockchainNode.Blockchain.StoreNewBlock(&block)
+				fullnode.Blockchain.StoreNewBlock(&block)
 			}
-			blockchainNode.StartP2PNode()
+			fullnode.StartP2PNode()
 		}()
 	}
 	go func() {
 		time.Sleep(3 * time.Second)
 		wg.Add(1)
 		defer wg.Done()
-		blockchainNode := network.NewSPVNode("localhost:8888")
-		blockchainNode.StartP2PNode()
+		spvNode := network.NewSPVNode("localhost:8888")
+		spvNode.StartP2PNode()
 	}()
 	wg.Wait()
 }

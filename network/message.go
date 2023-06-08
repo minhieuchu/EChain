@@ -24,7 +24,7 @@ type GetblocksMessage struct {
 
 type GetheadersMessage struct {
 	TopHeaderHash []byte
-	AddrFrom     string
+	AddrFrom      string
 }
 
 type InvMessage struct {
@@ -32,7 +32,7 @@ type InvMessage struct {
 }
 
 type HeaderMessage struct {
-	HeaderList [][]byte
+	HeaderList []*blockchain.BlockHeader
 }
 
 type GetdataMessage struct {
