@@ -22,8 +22,17 @@ type GetblocksMessage struct {
 	AddrFrom     string
 }
 
+type GetheadersMessage struct {
+	TopHeaderHash []byte
+	AddrFrom      string
+}
+
 type InvMessage struct {
 	HashList [][]byte
+}
+
+type HeaderMessage struct {
+	HeaderList []*blockchain.BlockHeader
 }
 
 type GetdataMessage struct {

@@ -1,11 +1,8 @@
 package main
 
 import (
-	"EChain/blockchain"
 	"EChain/network"
-	"fmt"
 	"os"
-	"time"
 )
 
 const (
@@ -16,21 +13,15 @@ const (
 func main() {
 	networkAddress := os.Args[1]
 	nodeType := os.Args[2]
-	blockchainNode := network.NewBlockChainNode(nodeType, networkAddress, "15Hgpfs67bXWcFPHxF4mCjSbtXXMwbttge")
-	if nodeType == network.FULLNODE || nodeType == network.MINER {
-		for i := 0; i < FULLNODE_BLOCK_NUM; i++ {
-			var block blockchain.Block
-			lastHash, _ := blockchainNode.Blockchain.DataBase.Get([]byte(blockchain.LAST_HASH_STOGAGE_KEY), nil)
-			block.PrevHash = lastHash
-			block.Height = i + 1
-			block.Mine()
-			blockchainNode.Blockchain.StoreNewBlock(&block)
-		}
-	} else {
-		go func() {
-			time.Sleep(3 * time.Second)
-			fmt.Println("Synchronized blockchain's height:", blockchainNode.Blockchain.GetHeight(), "at", networkAddress)
-		}()
+
+	if nodeType == network.FULLNODE {
+		fullNode := network.NewFullNode(networkAddress, "15Hgpfs67bXWcFPHxF4mCjSbtXXMwbttge")
+		fullNode.StartP2PNode()
+	} else if nodeType == network.MINER {
+		minerNode := network.NewMinerNode(networkAddress, "15Hgpfs67bXWcFPHxF4mCjSbtXXMwbttge")
+		minerNode.StartP2PNode()
+	} else if nodeType == network.SPV {
+		spvNode := network.NewSPVNode(networkAddress)
+		spvNode.StartP2PNode()
 	}
-	blockchainNode.StartP2PNode()
 }

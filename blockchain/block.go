@@ -11,40 +11,43 @@ import (
 	"github.com/joho/godotenv"
 )
 
+type BlockHeader struct {
+	PrevHash   []byte
+	MerkleRoot []byte
+	Timestamp  string
+	Nonce      int
+}
+
 type Block struct {
+	BlockHeader
 	Transactions []*Transaction
-	Timestamp    string
-	PrevHash     []byte
-	Hash         []byte
-	Nonce        int
-	Height       int
 }
 
 func (block *Block) Mine() {
 	nonce := 1
 	for {
-		encodedBlock := bytes.Join(
-			[][]byte{
-				serialize(block.Transactions),
-				[]byte(block.Timestamp),
-				block.PrevHash,
-				serialize(nonce),
-			},
-			[]byte{},
-		)
-		blockHash := sha256.Sum256(encodedBlock)
-		hashValue := new(big.Int).SetBytes(blockHash[:])
+		block.Nonce = nonce
+		hashValue := new(big.Int).SetBytes(block.GetHash())
 
 		if hashValue.Cmp(TARGET_HASH) == -1 {
 			block.Nonce = nonce
-			block.Hash = blockHash[:]
 			break
 		}
 		nonce++
 	}
 }
 
-func Genesis() *Block {
+func (blockHeader *BlockHeader) GetHash() []byte {
+	firstHash := sha256.Sum256(serialize(blockHeader))
+	secondHash := sha256.Sum256(firstHash[:])
+	return secondHash[:]
+}
+
+func (block *Block) GetHash() []byte {
+	return block.BlockHeader.GetHash()
+}
+
+func GenerateGenesisBlock() *Block {
 	err := godotenv.Load()
 	handleErr(err)
 
@@ -59,9 +62,11 @@ func Genesis() *Block {
 	coinbaseTransaction.SetHash()
 
 	block := Block{
+		BlockHeader: BlockHeader{
+			Timestamp: genesisBlockDate.String(),
+			PrevHash:  []byte{},
+		},
 		Transactions: []*Transaction{&coinbaseTransaction},
-		Timestamp:    genesisBlockDate.String(),
-		PrevHash:     []byte{},
 	}
 	block.Mine()
 	return &block

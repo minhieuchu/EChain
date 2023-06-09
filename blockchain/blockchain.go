@@ -3,6 +3,7 @@ package blockchain
 import (
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -11,6 +12,11 @@ import (
 )
 
 type BlockChain struct {
+	DataBase *leveldb.DB
+	LastHash []byte
+}
+
+type BlockChainHeader struct {
 	DataBase *leveldb.DB
 	LastHash []byte
 }
@@ -29,8 +35,8 @@ func InitBlockChain(networkAddress, walletAddress string) *BlockChain {
 		log.Fatal(err)
 	}
 
-	genesisBlock := Genesis()
-	blockchain := BlockChain{db, genesisBlock.Hash}
+	genesisBlock := GenerateGenesisBlock()
+	blockchain := BlockChain{db, genesisBlock.GetHash()}
 	blockchain.StoreNewBlock(genesisBlock)
 
 	utxoSet := blockchain.UTXOSet()
@@ -39,16 +45,90 @@ func InitBlockChain(networkAddress, walletAddress string) *BlockChain {
 	return &blockchain
 }
 
+func InitBlockChainHeader(networkAddress string) *BlockChainHeader {
+	db, err := leveldb.OpenFile("storage/"+networkAddress, nil)
+	if err != nil {
+		fmt.Println("can not start database at", networkAddress)
+		return nil
+	}
+	blockchainHeader := BlockChainHeader{
+		DataBase: db,
+	}
+	genesisBlock := GenerateGenesisBlock()
+	blockchainHeader.LastHash = genesisBlock.GetHash()
+	blockchainHeader.DataBase.Put(blockchainHeader.LastHash, serialize(genesisBlock.BlockHeader), nil)
+	blockchainHeader.DataBase.Put([]byte(LAST_HASH_STOGAGE_KEY), blockchainHeader.LastHash, nil)
+	return &blockchainHeader
+}
+
 func (chainIterator *BlockChainIterator) CurrentBlock() *Block {
-	encodedBlock, err := chainIterator.DataBase.Get(chainIterator.CurrentHash, nil)
-	handleErr(err)
+	encodedBlock, _ := chainIterator.DataBase.Get(chainIterator.CurrentHash, nil)
 	return DeserializeBlock(encodedBlock)
 }
 
+func (blockchainHeader *BlockChainHeader) GetHeight() int {
+	currentHash := blockchainHeader.LastHash
+	height := 0
+	for {
+		encodedData, _ := blockchainHeader.DataBase.Get(currentHash, nil)
+		var header BlockHeader
+		genericDeserialize(encodedData, &header)
+		height++
+		if len(header.PrevHash) == 0 {
+			break
+		}
+		currentHash = header.PrevHash
+	}
+	return height
+}
+
+func (blockchainHeader *BlockChainHeader) SetHeader(header *BlockHeader) {
+	blockchainHeader.DataBase.Put(header.GetHash(), serialize(header), nil)
+}
+
+func (blockchainHeader *BlockChainHeader) SetLastHash(lastHash []byte) {
+	blockchainHeader.LastHash = lastHash
+	blockchainHeader.DataBase.Put([]byte(LAST_HASH_STOGAGE_KEY), lastHash, nil)
+}
+
+func (blockchainHeader *BlockChainHeader) GetUnmatchedHeaders(targetHeaderHash []byte) (bool, []*BlockHeader) {
+	headerExisted := false
+	unmatchedHeaders := make([]*BlockHeader, 0)
+	currentHash := blockchainHeader.LastHash
+
+	for {
+		encodedData, _ := blockchainHeader.DataBase.Get(currentHash, nil)
+		var currentHeader BlockHeader
+		genericDeserialize(encodedData, &currentHeader)
+
+		if slices.Equal(currentHash, targetHeaderHash) {
+			headerExisted = true
+			break
+		}
+
+		if len(currentHeader.PrevHash) == 0 {
+			break
+		} else {
+			unmatchedHeaders = append(unmatchedHeaders, &currentHeader)
+		}
+		currentHash = currentHeader.PrevHash
+	}
+
+	return headerExisted, unmatchedHeaders
+}
+
 func (blockchain *BlockChain) GetHeight() int {
-	encodedBlock, _ := blockchain.DataBase.Get(blockchain.LastHash, nil)
-	lastBlock := DeserializeBlock(encodedBlock)
-	return lastBlock.Height
+	chainIterator := BlockChainIterator{blockchain.DataBase, blockchain.LastHash}
+	blockHeight := 0
+	for {
+		currentBlock := chainIterator.CurrentBlock()
+		blockHeight++
+		if len(currentBlock.PrevHash) == 0 {
+			break
+		}
+		chainIterator.CurrentHash = currentBlock.PrevHash
+	}
+	return blockHeight
 }
 
 func (blockchain *BlockChain) UTXOSet() UTXOSet {
@@ -56,7 +136,7 @@ func (blockchain *BlockChain) UTXOSet() UTXOSet {
 }
 
 func (blockchain *BlockChain) SetBlock(block *Block) {
-	blockchain.DataBase.Put(block.Hash, serialize(block), nil)
+	blockchain.DataBase.Put(block.GetHash(), serialize(block), nil)
 }
 
 func (blockchain *BlockChain) SetLastHash(hash []byte) {
@@ -65,9 +145,9 @@ func (blockchain *BlockChain) SetLastHash(hash []byte) {
 }
 
 func (blockchain *BlockChain) StoreNewBlock(block *Block) {
-	blockchain.LastHash = block.Hash
-	blockchain.DataBase.Put(block.Hash, serialize(block), nil)
-	blockchain.DataBase.Put([]byte(LAST_HASH_STOGAGE_KEY), block.Hash, nil)
+	blockchain.LastHash = block.GetHash()
+	blockchain.DataBase.Put(blockchain.LastHash, serialize(block), nil)
+	blockchain.DataBase.Put([]byte(LAST_HASH_STOGAGE_KEY), blockchain.LastHash, nil)
 
 	utxoSet := blockchain.UTXOSet()
 	utxoSet.Update(block)
@@ -109,13 +189,12 @@ func (blockchain *BlockChain) AddBlock(transactions []*Transaction) error {
 		}
 	}
 	coinbaseTransaction := CoinBaseTransaction(WALLET_ADDRESS)
-	encodedBlock, _ := blockchain.DataBase.Get(blockchain.LastHash, nil)
-	lastBlock := DeserializeBlock(encodedBlock)
 	newBlock := Block{
+		BlockHeader: BlockHeader{
+			Timestamp: time.Now().String(),
+			PrevHash:  blockchain.LastHash,
+		},
 		Transactions: append([]*Transaction{coinbaseTransaction}, transactions...),
-		Timestamp:    time.Now().String(),
-		PrevHash:     blockchain.LastHash,
-		Height:       lastBlock.Height + 1,
 	}
 	newBlock.Mine()
 	blockchain.StoreNewBlock(&newBlock)
@@ -173,7 +252,7 @@ func (blockchain *BlockChain) GetUnmatchedBlocks(targetBlockHash []byte) (bool, 
 	for {
 		currentBlock := chainIterator.CurrentBlock()
 
-		if slices.Equal(currentBlock.Hash, targetBlockHash) {
+		if slices.Equal(currentBlock.GetHash(), targetBlockHash) {
 			blockExisted = true
 			break
 		}
@@ -181,12 +260,36 @@ func (blockchain *BlockChain) GetUnmatchedBlocks(targetBlockHash []byte) (bool, 
 		if len(currentBlock.PrevHash) == 0 {
 			break
 		} else {
-			unmatchedBlocks = append(unmatchedBlocks, currentBlock.Hash)
+			unmatchedBlocks = append(unmatchedBlocks, currentBlock.GetHash())
 		}
 		chainIterator.CurrentHash = currentBlock.PrevHash
 	}
 
 	return blockExisted, unmatchedBlocks
+}
+
+func (blockchain *BlockChain) GetUnmatchedHeaders(targetHeaderHash []byte) (bool, []*BlockHeader) {
+	headerExisted := false
+	unmatchedHeaders := make([]*BlockHeader, 0)
+	chainIterator := BlockChainIterator{blockchain.DataBase, blockchain.LastHash}
+
+	for {
+		currentBlock := chainIterator.CurrentBlock()
+
+		if slices.Equal(currentBlock.GetHash(), targetHeaderHash) {
+			headerExisted = true
+			break
+		}
+
+		if len(currentBlock.PrevHash) == 0 {
+			break
+		} else {
+			unmatchedHeaders = append(unmatchedHeaders, &currentBlock.BlockHeader)
+		}
+		chainIterator.CurrentHash = currentBlock.PrevHash
+	}
+
+	return headerExisted, unmatchedHeaders
 }
 
 func (blockchain *BlockChain) GetBlocksFromHashes(hashList [][]byte) []*Block {
