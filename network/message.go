@@ -45,3 +45,7 @@ type BlockdataMessage struct {
 	Index     int
 	BlockList []*blockchain.Block
 }
+
+type GetUTXOMessage struct {
+	TargetAddress string
+}

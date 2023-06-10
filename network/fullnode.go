@@ -30,6 +30,90 @@ func NewFullNode(networkAddress, walletAddress string) *FullNode {
 	}
 }
 
+// ======= Send messages =======
+
+func (node *FullNode) sendAddrMsg(toAddress string) {
+	fmt.Println("Send Addr msg from", node.NetworkAddress, "to", toAddress)
+	addrMsg := AddrMessage{node.NetworkAddress}
+	sentData := append(msgTypeToBytes(ADDR_MSG), serialize(addrMsg)...)
+	sendMessage(toAddress, sentData)
+}
+
+func (node *FullNode) sendVerackMsg(toAddress string) {
+	fmt.Println("Send Verack msg from", node.NetworkAddress, "to", toAddress)
+	verackMsg := VerackMessage{node.NetworkAddress}
+	sentData := append(msgTypeToBytes(VERACK_MSG), serialize(verackMsg)...)
+	sendMessage(toAddress, sentData)
+}
+
+func (node *FullNode) StartP2PNode() {
+	fmt.Println(" ===== Starting blockchain node at", node.NetworkAddress, "=====")
+	ln, err := net.Listen(protocol, node.NetworkAddress)
+	if err != nil {
+		log.Fatal("can not start server at", node.NetworkAddress)
+	}
+
+	go func() {
+		time.Sleep(2 * time.Second)
+		for _, peerAddr := range initialPeers {
+			if peerAddr != node.NetworkAddress {
+				node.sendVersionMsg(peerAddr)
+			}
+		}
+	}()
+
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			log.Panic(err.Error())
+		}
+
+		go node.handleConnection(conn)
+	}
+}
+
+func (node *FullNode) sendGetBlocksMsg(toAddress string) {
+	fmt.Println("Send Getblocks msg from", node.NetworkAddress, "to", toAddress)
+	lastBlockHash := node.Blockchain.LastHash
+	getblocksMsg := GetblocksMessage{lastBlockHash, node.NetworkAddress}
+	sentData := append(msgTypeToBytes(GETBLOCKS_MSG), serialize(getblocksMsg)...)
+	sendMessage(toAddress, sentData)
+}
+
+func (node *FullNode) sendVersionMsg(toAddress string) {
+	fmt.Println("Send Version msg from", node.NetworkAddress, "to", toAddress)
+	nBestHeight := node.Blockchain.GetHeight()
+	versionMsg := VersionMessage{node.Version, toAddress, node.NetworkAddress, nBestHeight}
+	sentData := append(msgTypeToBytes(VERSION_MSG), serialize(versionMsg)...)
+	sendMessage(toAddress, sentData)
+}
+
+func (node *FullNode) sendGetdataMessage(toAddress string, getdataMsg *GetdataMessage) {
+	fmt.Println("Send Getdata msg from", node.NetworkAddress, "to", toAddress)
+	sentData := append(msgTypeToBytes(GETDATA_MSG), serialize(getdataMsg)...)
+	sendMessageBlocking(toAddress, sentData)
+}
+
+func (node *FullNode) sendBlockdataMessage(toAddress string, msgIndex int, blockList []*blockchain.Block) {
+	fmt.Println("Send Blockdata msg from", node.NetworkAddress, "to", toAddress)
+	sentData := append(msgTypeToBytes(BLOCKDATA_MSG), serialize(BlockdataMessage{msgIndex, blockList})...)
+	sendMessage(toAddress, sentData)
+}
+
+func (node *FullNode) sendInvMessage(toAddress string, invMsg *InvMessage) {
+	fmt.Println("Send Inv msg from", node.NetworkAddress, "to", toAddress)
+	sentData := append(msgTypeToBytes(INV_MSG), serialize(invMsg)...)
+	sendMessage(toAddress, sentData)
+}
+
+func (node *FullNode) sendHeaderMessage(toAddress string, headerMsg *HeaderMessage) {
+	fmt.Println("Send Headers msg from", node.NetworkAddress, "to", toAddress)
+	sentData := append(msgTypeToBytes(HEADERS_MSG), serialize(headerMsg)...)
+	sendMessage(toAddress, sentData)
+}
+
+// ======= Request handlers =======
+
 func (node *FullNode) handleGetblocksMsg(msg []byte) {
 	var getblocksMsg GetblocksMessage
 	genericDeserialize(msg, &getblocksMsg)
@@ -141,48 +225,6 @@ func (node *FullNode) handleBlockdataMsg(msg []byte) {
 	}
 }
 
-func (node *FullNode) sendGetBlocksMsg(toAddress string) {
-	fmt.Println("Send Getblocks msg from", node.NetworkAddress, "to", toAddress)
-	lastBlockHash := node.Blockchain.LastHash
-	getblocksMsg := GetblocksMessage{lastBlockHash, node.NetworkAddress}
-	sentData := append(msgTypeToBytes(GETBLOCKS_MSG), serialize(getblocksMsg)...)
-	sendMessage(toAddress, sentData)
-}
-
-func (node *FullNode) sendVersionMsg(toAddress string) {
-	fmt.Println("Send Version msg from", node.NetworkAddress, "to", toAddress)
-	nBestHeight := node.Blockchain.GetHeight()
-	versionMsg := VersionMessage{node.Version, toAddress, node.NetworkAddress, nBestHeight}
-	sentData := append(msgTypeToBytes(VERSION_MSG), serialize(versionMsg)...)
-	sendMessage(toAddress, sentData)
-}
-
-func (node *FullNode) sendGetdataMessage(toAddress string, getdataMsg *GetdataMessage) {
-	fmt.Println("Send Getdata msg from", node.NetworkAddress, "to", toAddress)
-	sentData := append(msgTypeToBytes(GETDATA_MSG), serialize(getdataMsg)...)
-	sendMessageBlocking(toAddress, sentData)
-}
-
-func (node *FullNode) sendBlockdataMessage(toAddress string, msgIndex int, blockList []*blockchain.Block) {
-	fmt.Println("Send Blockdata msg from", node.NetworkAddress, "to", toAddress)
-	sentData := append(msgTypeToBytes(BLOCKDATA_MSG), serialize(BlockdataMessage{msgIndex, blockList})...)
-	sendMessage(toAddress, sentData)
-}
-
-func (node *FullNode) sendInvMessage(toAddress string, invMsg *InvMessage) {
-	fmt.Println("Send Inv msg from", node.NetworkAddress, "to", toAddress)
-	sentData := append(msgTypeToBytes(INV_MSG), serialize(invMsg)...)
-	sendMessage(toAddress, sentData)
-}
-
-func (node *FullNode) sendHeaderMessage(toAddress string, headerMsg *HeaderMessage) {
-	fmt.Println("Send Headers msg from", node.NetworkAddress, "to", toAddress)
-	sentData := append(msgTypeToBytes(HEADERS_MSG), serialize(headerMsg)...)
-	sendMessage(toAddress, sentData)
-}
-
-// ======= Handle requests =======
-
 func (node *FullNode) handleVersionMsg(msg []byte) {
 	var versionMsg VersionMessage
 	genericDeserialize(msg, &versionMsg)
@@ -226,6 +268,15 @@ func (node *FullNode) handleAddrMsg(msg []byte) {
 	}
 }
 
+func (node *FullNode) handeGetUTXOMsg(conn net.Conn, msg []byte) {
+	var getUTXOMsg GetUTXOMessage
+	genericDeserialize(msg, &getUTXOMsg)
+
+	utxoMap := node.Blockchain.GetUTXOs(getUTXOMsg.TargetAddress)
+	conn.Write(serialize(utxoMap))
+	conn.Close()
+}
+
 func (node *FullNode) handleConnection(conn net.Conn) {
 	data, err := io.ReadAll(conn)
 	defer conn.Close()
@@ -250,49 +301,9 @@ func (node *FullNode) handleConnection(conn net.Conn) {
 		node.handleBlockdataMsg(payload)
 	case GETHEADERS_MSG:
 		node.handleGetheadersMsg(payload)
+	case GETUTXO_MSG:
+		node.handeGetUTXOMsg(conn, payload)
 	default:
 		fmt.Println("invalid message")
-	}
-}
-
-// ======= Send messages =======
-
-func (node *FullNode) sendAddrMsg(toAddress string) {
-	fmt.Println("Send Addr msg from", node.NetworkAddress, "to", toAddress)
-	addrMsg := AddrMessage{node.NetworkAddress}
-	sentData := append(msgTypeToBytes(ADDR_MSG), serialize(addrMsg)...)
-	sendMessage(toAddress, sentData)
-}
-
-func (node *FullNode) sendVerackMsg(toAddress string) {
-	fmt.Println("Send Verack msg from", node.NetworkAddress, "to", toAddress)
-	verackMsg := VerackMessage{node.NetworkAddress}
-	sentData := append(msgTypeToBytes(VERACK_MSG), serialize(verackMsg)...)
-	sendMessage(toAddress, sentData)
-}
-
-func (node *FullNode) StartP2PNode() {
-	fmt.Println(" ===== Starting blockchain node at", node.NetworkAddress, "=====")
-	ln, err := net.Listen(protocol, node.NetworkAddress)
-	if err != nil {
-		log.Fatal("can not start server at", node.NetworkAddress)
-	}
-
-	go func() {
-		time.Sleep(2 * time.Second)
-		for _, peerAddr := range initialPeers {
-			if peerAddr != node.NetworkAddress {
-				node.sendVersionMsg(peerAddr)
-			}
-		}
-	}()
-
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			log.Panic(err.Error())
-		}
-
-		go node.handleConnection(conn)
 	}
 }

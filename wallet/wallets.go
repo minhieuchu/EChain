@@ -2,21 +2,31 @@ package wallet
 
 import (
 	"EChain/blockchain"
-
+	"EChain/network"
 	"crypto/elliptic"
 	"encoding/json"
+	"io"
+	"net"
 	"os"
+	"sync"
+	"time"
 )
 
-const walletFilePath = "wallets.json"
+const (
+	protocol       = "tcp"
+	walletFilePath = "wallets.json"
+	msgTypeLength  = 12
+)
+
+var initialConnectedNodes = []string{"localhost:8333", "localhost:8334", "localhost:8335"}
 
 type Wallets struct {
-	connectedChain blockchain.BlockChain
+	connectedNodes []string
 	wallets        map[string]Wallet
 }
 
-func (wallets *Wallets) ConnectChain(chain *blockchain.BlockChain) {
-	wallets.connectedChain = *chain
+func (wallets *Wallets) ConnectNode(nodeAddress string) {
+	wallets.connectedNodes = append(wallets.connectedNodes, nodeAddress)
 }
 
 func (wallets *Wallets) GetWallet(address string) Wallet {
@@ -57,7 +67,7 @@ func LoadWallets() *Wallets {
 		wallets[key] = wallet
 	}
 
-	return &Wallets{blockchain.BlockChain{}, wallets}
+	return &Wallets{initialConnectedNodes, wallets}
 }
 
 func (wallets *Wallets) SaveFile() {
@@ -66,12 +76,51 @@ func (wallets *Wallets) SaveFile() {
 	handleError(err)
 }
 
-func (wallets *Wallets) Transfer(toAddress string, amount int) error {
-	senderWallet := wallets.GetWallet(blockchain.WALLET_ADDRESS)
-	err := wallets.connectedChain.Transfer(senderWallet.PrivateKey, senderWallet.PublickKey, toAddress, amount)
-	return err
+func (wallets *Wallets) Transfer(fromAddress, toAddress string, amount int) error {
+	return nil
 }
 
 func (wallets *Wallets) GetBalance(address string) int {
-	return wallets.connectedChain.GetBalance(address)
+	var wg sync.WaitGroup
+	getUTXOMsg := network.GetUTXOMessage{TargetAddress: address}
+	sentData := append(msgTypeToBytes(network.GETUTXO_MSG), serialize(getUTXOMsg)...)
+	balanceChannel := make(chan int, len(wallets.connectedNodes))
+
+	for _, nodeAddress := range wallets.connectedNodes {
+		wg.Add(1)
+		go func(targetAddress string) {
+			go func() {
+				time.Sleep(2 * time.Second)
+				wg.Done()
+			}()
+			conn, err := net.Dial(protocol, targetAddress)
+			if err != nil {
+				return
+			}
+			conn.Write(sentData)
+			conn.(*net.TCPConn).CloseWrite()
+
+			resp, er := io.ReadAll(conn)
+			if er != nil {
+				return
+			}
+			defer conn.Close()
+			var utxoMap map[string]blockchain.TxOutputs
+			genericDeserialize(resp, &utxoMap)
+
+			balance := 0
+			for _, txOutputs := range utxoMap {
+				for _, output := range txOutputs {
+					balance += output.Amount
+				}
+			}
+			balanceChannel <- balance
+		}(nodeAddress)
+	}
+	wg.Wait()
+	if len(balanceChannel) == 0 {
+		return 0
+	}
+	accountBalance := <-balanceChannel
+	return accountBalance
 }
