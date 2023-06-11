@@ -5,10 +5,10 @@ import (
 	"EChain/network"
 	"crypto/elliptic"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"os"
-	"sync"
 	"time"
 )
 
@@ -80,20 +80,31 @@ func (wallets *Wallets) Transfer(fromAddress, toAddress string, amount int) erro
 	return nil
 }
 
-func (wallets *Wallets) GetBalance(address string) int {
-	var wg sync.WaitGroup
-	getUTXOMsg := network.GetUTXOMessage{TargetAddress: address}
-	sentData := append(msgTypeToBytes(network.GETUTXO_MSG), serialize(getUTXOMsg)...)
-	balanceChannel := make(chan int, len(wallets.connectedNodes))
+func (wallets *Wallets) GetBalance(walletAddress string) int {
+	accountBalance := 0
+	utxoMap, err := wallets.getUTXOs(walletAddress)
+	if err != nil {
+		fmt.Println(err.Error())
+		return 0
+	}
+	for _, txOutputs := range utxoMap {
+		for _, output := range txOutputs {
+			accountBalance += output.Amount
+		}
+	}
+	return accountBalance
+}
 
-	for _, nodeAddress := range wallets.connectedNodes {
-		wg.Add(1)
+func (wallets *Wallets) getUTXOs(walletAddress string) (map[string]blockchain.TxOutputs, error) {
+	getUTXOMsg := network.GetUTXOMessage{TargetAddress: walletAddress}
+	sentData := append(msgTypeToBytes(network.GETUTXO_MSG), serialize(getUTXOMsg)...)
+
+	successFlag := make(chan bool, len(wallets.connectedNodes))
+	resultChan := make(chan map[string]blockchain.TxOutputs, len(wallets.connectedNodes))
+
+	for _, nodeAddr := range wallets.connectedNodes {
 		go func(targetAddress string) {
-			go func() {
-				time.Sleep(2 * time.Second)
-				wg.Done()
-			}()
-			conn, err := net.Dial(protocol, targetAddress)
+			conn, err := net.DialTimeout(protocol, targetAddress, time.Second)
 			if err != nil {
 				return
 			}
@@ -107,20 +118,34 @@ func (wallets *Wallets) GetBalance(address string) int {
 			defer conn.Close()
 			var utxoMap map[string]blockchain.TxOutputs
 			genericDeserialize(resp, &utxoMap)
+			successFlag <- true
+			resultChan <- utxoMap
+		}(nodeAddr)
+	}
 
-			balance := 0
-			for _, txOutputs := range utxoMap {
-				for _, output := range txOutputs {
-					balance += output.Amount
-				}
-			}
-			balanceChannel <- balance
-		}(nodeAddress)
+	var utxoMap map[string]blockchain.TxOutputs
+	var loopCounter int
+	var didRequestSucceed bool
+
+OuterLoop:
+	for {
+		time.Sleep(200 * time.Millisecond)
+		select {
+		case <-successFlag:
+			utxoMap = <-resultChan
+			didRequestSucceed = true
+			break OuterLoop
+		default:
+			loopCounter++
+		}
+		if loopCounter > 10 {
+			break OuterLoop
+		}
 	}
-	wg.Wait()
-	if len(balanceChannel) == 0 {
-		return 0
+
+	if didRequestSucceed {
+		return utxoMap, nil
 	}
-	accountBalance := <-balanceChannel
-	return accountBalance
+
+	return nil, fmt.Errorf("can not query UTXOs for %s", walletAddress)
 }
