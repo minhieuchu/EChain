@@ -31,7 +31,7 @@ type TxInput struct {
 }
 
 type TxOutput struct {
-	Amount       int
+	Value        int
 	ScriptPubKey LockingScript
 }
 
@@ -54,8 +54,8 @@ func (txnInput TxInput) Hash() []byte {
 func CoinBaseTransaction(toAddress string) *Transaction {
 	txOutput := createTxnOutput(COINBASE_REWARD, toAddress)
 	transaction := Transaction{
-		Inputs:  []TxInput{},
-		Outputs: []TxOutput{txOutput},
+		Inputs:   []TxInput{},
+		Outputs:  []TxOutput{txOutput},
 		Locktime: getCurrentTimeInMilliSec(),
 	}
 	transaction.SetHash()

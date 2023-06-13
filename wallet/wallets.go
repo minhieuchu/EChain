@@ -77,6 +77,57 @@ func (wallets *Wallets) SaveFile() {
 }
 
 func (wallets *Wallets) Transfer(fromAddress, toAddress string, amount int) error {
+	senderWallet, existed := wallets.wallets[fromAddress]
+	if !existed {
+		return fmt.Errorf("wallet does not contain keys for address %s", fromAddress)
+	}
+	utxoMap, err := wallets.getUTXOs(fromAddress)
+	if err != nil {
+		return err
+	}
+	transferAmount := 0
+	newTxnInputs := []blockchain.TxInput{}
+	newTxnOutputs := []blockchain.TxOutput{}
+
+OuterLoop:
+	for txnID, txnOutputs := range utxoMap {
+		for _, output := range txnOutputs {
+			transferAmount += output.Value
+			newTxnInputs = append(newTxnInputs, createTxnInput([]byte(txnID), output.Index, senderWallet.PublickKey))
+			if transferAmount >= amount {
+				break OuterLoop
+			}
+		}
+	}
+
+	if transferAmount < amount {
+		return fmt.Errorf("not enough balance")
+	}
+
+	newTxnOutputs = append(newTxnOutputs, createTxnOutput(amount, toAddress))
+	if transferAmount > amount {
+		newTxnOutputs = append(newTxnOutputs, createTxnOutput(transferAmount-amount, fromAddress))
+	}
+
+	newTransaction := blockchain.Transaction{Inputs: newTxnInputs, Outputs: newTxnOutputs, Locktime: getCurrentTimeInMilliSec()}
+	newTransaction.Sign(senderWallet.PrivateKey)
+	newTransaction.SetHash()
+
+	sentData := append(msgTypeToBytes(network.NEWTXN_MSG), serialize(newTransaction)...)
+
+	// Broadcast new transaction to network
+	for _, nodeAddr := range wallets.connectedNodes {
+		go func(targetAddress string) {
+			conn, err := net.DialTimeout(protocol, targetAddress, time.Second)
+			if err != nil {
+				return
+			}
+			conn.Write(sentData)
+			conn.(*net.TCPConn).CloseWrite()
+			conn.Close()
+		}(nodeAddr)
+	}
+
 	return nil
 }
 
@@ -89,7 +140,7 @@ func (wallets *Wallets) GetBalance(walletAddress string) int {
 	}
 	for _, txOutputs := range utxoMap {
 		for _, output := range txOutputs {
-			accountBalance += output.Amount
+			accountBalance += output.Value
 		}
 	}
 	return accountBalance

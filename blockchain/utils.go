@@ -78,7 +78,7 @@ func serialize(value interface{}) []byte {
 	return byteBuffer.Bytes()
 }
 
-func genericDeserialize[T any] (data []byte, target *T) {
+func genericDeserialize[T any](data []byte, target *T) {
 	byteBuffer := bytes.NewBuffer(data)
 	decoder := gob.NewDecoder(byteBuffer)
 	decoder.Decode(target)

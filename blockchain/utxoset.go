@@ -39,7 +39,7 @@ OuterLoop:
 
 		for _, txnOutput := range txnOutputs {
 			if txnOutput.IsBoundTo(address) {
-				accumulatedAmount += txnOutput.Amount
+				accumulatedAmount += txnOutput.Value
 				utxoMap[string(txnID)] = append(utxoMap[string(txnID)], txnOutput)
 			}
 			if accumulatedAmount >= amount {

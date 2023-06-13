@@ -18,6 +18,7 @@ const (
 	BLOCKDATA_MSG  = "blockdata"
 	HEADERDATA_MSG = "headerdata"
 	GETUTXO_MSG    = "getutxo"
+	NEWTXN_MSG     = "newtxn"
 )
 
 const (
