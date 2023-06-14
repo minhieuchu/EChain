@@ -3,7 +3,9 @@ package wallet
 import (
 	"EChain/blockchain"
 	"EChain/network"
+	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -110,7 +112,7 @@ OuterLoop:
 	}
 
 	newTransaction := blockchain.Transaction{Inputs: newTxnInputs, Outputs: newTxnOutputs, Locktime: getCurrentTimeInMilliSec()}
-	newTransaction.Sign(senderWallet.PrivateKey)
+	wallets.signTransaction(&newTransaction, senderWallet.PrivateKey)
 	newTransaction.SetHash()
 
 	sentData := append(msgTypeToBytes(network.NEWTXN_MSG), serialize(newTransaction)...)
@@ -129,6 +131,15 @@ OuterLoop:
 	}
 
 	return nil
+}
+
+func (wallets *Wallets) signTransaction(transaction *blockchain.Transaction, privKey ecdsa.PrivateKey) {
+	for inputIndex, txnInput := range transaction.Inputs {
+		inputHash := txnInput.Hash()
+		r, s, _ := ecdsa.Sign(rand.Reader, &privKey, inputHash)
+		signature := append(r.Bytes(), s.Bytes()...)
+		transaction.Inputs[inputIndex].ScriptSig.Signature = signature
+	}
 }
 
 func (wallets *Wallets) GetBalance(walletAddress string) int {
