@@ -2,9 +2,12 @@ package network
 
 import (
 	"EChain/blockchain"
+	"bytes"
+	"crypto/ecdsa"
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"net"
 	"sync"
 	"time"
@@ -109,6 +112,12 @@ func (node *FullNode) sendInvMessage(toAddress string, invMsg *InvMessage) {
 func (node *FullNode) sendHeaderMessage(toAddress string, headerMsg *HeaderMessage) {
 	fmt.Println("Send Headers msg from", node.NetworkAddress, "to", toAddress)
 	sentData := append(msgTypeToBytes(HEADERS_MSG), serialize(headerMsg)...)
+	sendMessage(toAddress, sentData)
+}
+
+func (node *FullNode) sendNewTxnMessage(toAddress string, newTxnMsg *NewTxnMessage) {
+	fmt.Println("Send NewTxn msg from", node.NetworkAddress, "to", toAddress)
+	sentData := append(msgTypeToBytes(NEWTXN_MSG), serialize(newTxnMsg)...)
 	sendMessage(toAddress, sentData)
 }
 
@@ -277,6 +286,57 @@ func (node *FullNode) handeGetUTXOMsg(conn net.Conn, msg []byte) {
 	conn.Close()
 }
 
+func (node *FullNode) handleNewTxnMsg(msg []byte) {
+	utxoSet := node.Blockchain.UTXOSet()
+	totalInputAmount := 0
+	var newTransaction blockchain.Transaction
+	genericDeserialize(msg, &newTransaction)
+	
+	// Step 1: Check if transaction inputs reference valid UTXOs &
+	// check if input signature works with output's locking script
+	for _, txnInput := range newTransaction.Inputs {
+		referencedTxOutput := utxoSet.GetTxOutputFromTxInput(&txnInput)
+		if referencedTxOutput == nil {
+			fmt.Println("Transaction input references UTXO that does not exist")
+			return
+		}
+		signature := txnInput.ScriptSig.Signature
+		pubkey := txnInput.ScriptSig.PubKey
+
+		if !bytes.Equal(getPubkeyHashFromPubkey(pubkey), referencedTxOutput.ScriptPubKey.PubKeyHash) {
+			fmt.Println("invalid public key in transaction input")
+			return
+		}
+
+		signatureLength := len(signature)
+		r := new(big.Int).SetBytes(signature[:(signatureLength / 2)])
+		s := new(big.Int).SetBytes(signature[(signatureLength / 2):])
+		ecdsaPubkey := getECDSAPubkeyFromUncompressedPubkey(pubkey)
+		if !ecdsa.Verify(&ecdsaPubkey, txnInput.Hash(), r, s) {
+			fmt.Println("invalid signature")
+			return
+		}
+
+		totalInputAmount += referencedTxOutput.Value
+	}
+
+	// Step 2: Verify if total input does not exceed spent output
+	spentAmount := 0
+	for _, txOutput := range newTransaction.Outputs {
+		spentAmount += txOutput.Value
+	}
+	if totalInputAmount < spentAmount {
+		fmt.Println("spent output exceeds input amount")
+		return
+	}
+
+	// Step 3: Replay transaction to network
+	// Todo: Add to current node's mempool
+	for _, nodeAddr := range node.connectedPeers {
+		node.sendNewTxnMessage(nodeAddr, &NewTxnMessage{newTransaction})
+	}
+}
+
 func (node *FullNode) handleConnection(conn net.Conn) {
 	data, err := io.ReadAll(conn)
 	defer conn.Close()
@@ -303,6 +363,8 @@ func (node *FullNode) handleConnection(conn net.Conn) {
 		node.handleGetheadersMsg(payload)
 	case GETUTXO_MSG:
 		node.handeGetUTXOMsg(conn, payload)
+	case NEWTXN_MSG:
+		node.handleNewTxnMsg(payload)
 	default:
 		fmt.Println("invalid message")
 	}

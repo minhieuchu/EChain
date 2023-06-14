@@ -35,7 +35,7 @@ func (utxoSet *UTXOSet) FindSpendableOutput(address string, amount int) (int, ma
 OuterLoop:
 	for iter.Next() {
 		txnID := iter.Key()[utxoPrefixLength:]
-		txnOutputs := DeserializeTxnOutputs(iter.Value())
+		txnOutputs := deserializeTxnOutputs(iter.Value())
 
 		for _, txnOutput := range txnOutputs {
 			if txnOutput.IsBoundTo(address) {
@@ -58,7 +58,7 @@ func (utxoSet *UTXOSet) FindUTXO(address string) map[string]TxOutputs {
 
 	for iter.Next() {
 		txnID := iter.Key()[utxoPrefixLength:]
-		txnOutputs := DeserializeTxnOutputs(iter.Value())
+		txnOutputs := deserializeTxnOutputs(iter.Value())
 
 		for _, txnOutput := range txnOutputs {
 			if txnOutput.IsBoundTo(address) {
@@ -91,11 +91,11 @@ func (utxoSet *UTXOSet) Update(newBlock *Block) {
 
 	for txnID, spentTxnOutputIDs := range spentTxnOutputs {
 		utxoSetTxnID := append(utxoPrefix, []byte(txnID)...)
-		currentUTXOSet, _ := utxoSet.database.Get(utxoSetTxnID, nil)
-		currentUnspentTxOutputs := DeserializeTxnOutputs(currentUTXOSet)
+		encodedTxnOutputs, _ := utxoSet.database.Get(utxoSetTxnID, nil)
+		currentTxnOutputs := deserializeTxnOutputs(encodedTxnOutputs)
 
 		var newTxOutputs TxOutputs
-		for _, unspentTxOutput := range currentUnspentTxOutputs {
+		for _, unspentTxOutput := range currentTxnOutputs {
 			if !slices.Contains(spentTxnOutputIDs, unspentTxOutput.Index) {
 				newTxOutputs = append(newTxOutputs, unspentTxOutput)
 			}
@@ -108,6 +108,19 @@ func (utxoSet *UTXOSet) Update(newBlock *Block) {
 		}
 	}
 	utxoSet.database.Write(batch, nil)
+}
+
+func (utxoSet *UTXOSet) GetTxOutputFromTxInput(txnInput *TxInput) *TxOutput {
+	referencedTxnID := txnInput.TxID
+	utxoSetTxnID := append(utxoPrefix, referencedTxnID...)
+	encodedTxnOutputs, _ := utxoSet.database.Get(utxoSetTxnID, nil)
+	currentTxnOutputs := deserializeTxnOutputs(encodedTxnOutputs)
+	for _, txOutput := range currentTxnOutputs {
+		if txOutput.Index == txnInput.VOut {
+			return &txOutput.TxOutput
+		}
+	}
+	return nil
 }
 
 func (utxoSet *UTXOSet) ReIndex() {
@@ -154,7 +167,7 @@ func (utxoSet *UTXOSet) ReIndex() {
 	}
 }
 
-func DeserializeTxnOutputs(outputs []byte) TxOutputs {
+func deserializeTxnOutputs(outputs []byte) TxOutputs {
 	var txnOutputs TxOutputs
 	byteBuffer := bytes.NewBuffer(outputs)
 	decoder := gob.NewDecoder(byteBuffer)
@@ -167,7 +180,7 @@ func (utxoSet *UTXOSet) print() {
 
 	fmt.Println("===== Start Logging UTXO Set =====")
 	for iter.Next() {
-		txnOutputs := DeserializeTxnOutputs(iter.Value())
+		txnOutputs := deserializeTxnOutputs(iter.Value())
 		fmt.Println("TxnID: ", iter.Key()[utxoPrefixLength:])
 		for _, output := range txnOutputs {
 			fmt.Println("UTXO: ")

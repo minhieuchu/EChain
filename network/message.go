@@ -49,3 +49,7 @@ type BlockdataMessage struct {
 type GetUTXOMessage struct {
 	TargetAddress string
 }
+
+type NewTxnMessage struct {
+	Transaction blockchain.Transaction
+}

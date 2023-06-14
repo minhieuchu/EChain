@@ -2,12 +2,37 @@ package network
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/sha256"
 	"encoding/gob"
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"net"
+
+	"golang.org/x/crypto/ripemd160"
 )
+
+func getPubkeyHashFromPubkey(pubkey []byte) []byte {
+	sha256Hash := sha256.Sum256(pubkey)
+	hasher := ripemd160.New()
+	hasher.Write(sha256Hash[:])
+	return hasher.Sum(nil)
+}
+
+func getECDSAPubkeyFromUncompressedPubkey(uncompressedPubKey []byte) ecdsa.PublicKey {
+	pubkeyCoordinates := uncompressedPubKey[1:] // remove the 1st byte prefix for uncompressed version
+	pubkeyLength := len(pubkeyCoordinates)
+	x := pubkeyCoordinates[:(pubkeyLength / 2)]
+	y := pubkeyCoordinates[(pubkeyLength / 2):]
+	bigIntX := new(big.Int).SetBytes(x)
+	bigIntY := new(big.Int).SetBytes(y)
+	curve := elliptic.P256()
+	ecdsaPubkey := ecdsa.PublicKey{Curve: curve, X: bigIntX, Y: bigIntY}
+	return ecdsaPubkey
+}
 
 func sendMessageBlocking(toAddress string, msg []byte) {
 	conn, err := net.Dial(protocol, toAddress)
@@ -52,7 +77,7 @@ func serialize(value interface{}) []byte {
 	return byteBuffer.Bytes()
 }
 
-func genericDeserialize[T any] (data []byte, target *T) {
+func genericDeserialize[T any](data []byte, target *T) {
 	byteBuffer := bytes.NewBuffer(data)
 	decoder := gob.NewDecoder(byteBuffer)
 	decoder.Decode(target)
