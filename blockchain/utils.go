@@ -40,7 +40,7 @@ func getECDSAPubkeyFromUncompressedPubkey(uncompressedPubKey []byte) ecdsa.Publi
 	bigIntX := new(big.Int).SetBytes(x)
 	bigIntY := new(big.Int).SetBytes(y)
 	curve := elliptic.P256()
-	ecdsaPubkey := ecdsa.PublicKey{curve, bigIntX, bigIntY}
+	ecdsaPubkey := ecdsa.PublicKey{Curve: curve, X: bigIntX, Y: bigIntY}
 	return ecdsaPubkey
 }
 
@@ -78,7 +78,7 @@ func serialize(value interface{}) []byte {
 	return byteBuffer.Bytes()
 }
 
-func genericDeserialize[T any] (data []byte, target *T) {
+func genericDeserialize[T any](data []byte, target *T) {
 	byteBuffer := bytes.NewBuffer(data)
 	decoder := gob.NewDecoder(byteBuffer)
 	decoder.Decode(target)

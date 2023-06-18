@@ -201,17 +201,10 @@ func (blockchain *BlockChain) AddBlock(transactions []*Transaction) error {
 	return nil
 }
 
-func (blockchain *BlockChain) GetBalance(address string) int {
-	balance := 0
+func (blockchain *BlockChain) GetUTXOs(address string) map[string]TxOutputs {
 	utxoSet := blockchain.UTXOSet()
 	unspentTransactionOutputs := utxoSet.FindUTXO(address)
-
-	for _, txnOutputs := range unspentTransactionOutputs {
-		for _, output := range txnOutputs {
-			balance += output.Amount
-		}
-	}
-	return balance
+	return unspentTransactionOutputs
 }
 
 func (blockchain *BlockChain) Transfer(privKey ecdsa.PrivateKey, pubKey []byte, toAddress string, amount int) error {

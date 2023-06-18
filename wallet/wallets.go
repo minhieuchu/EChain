@@ -2,21 +2,33 @@ package wallet
 
 import (
 	"EChain/blockchain"
-
+	"EChain/network"
+	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/rand"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net"
 	"os"
+	"time"
 )
 
-const walletFilePath = "wallets.json"
+const (
+	protocol       = "tcp"
+	walletFilePath = "wallets.json"
+	msgTypeLength  = 12
+)
+
+var initialConnectedNodes = []string{"localhost:8333", "localhost:8334", "localhost:8335"}
 
 type Wallets struct {
-	connectedChain blockchain.BlockChain
+	connectedNodes []string
 	wallets        map[string]Wallet
 }
 
-func (wallets *Wallets) ConnectChain(chain *blockchain.BlockChain) {
-	wallets.connectedChain = *chain
+func (wallets *Wallets) ConnectNode(nodeAddress string) {
+	wallets.connectedNodes = append(wallets.connectedNodes, nodeAddress)
 }
 
 func (wallets *Wallets) GetWallet(address string) Wallet {
@@ -57,7 +69,7 @@ func LoadWallets() *Wallets {
 		wallets[key] = wallet
 	}
 
-	return &Wallets{blockchain.BlockChain{}, wallets}
+	return &Wallets{initialConnectedNodes, wallets}
 }
 
 func (wallets *Wallets) SaveFile() {
@@ -66,12 +78,136 @@ func (wallets *Wallets) SaveFile() {
 	handleError(err)
 }
 
-func (wallets *Wallets) Transfer(toAddress string, amount int) error {
-	senderWallet := wallets.GetWallet(blockchain.WALLET_ADDRESS)
-	err := wallets.connectedChain.Transfer(senderWallet.PrivateKey, senderWallet.PublickKey, toAddress, amount)
-	return err
+func (wallets *Wallets) Transfer(fromAddress, toAddress string, amount int) error {
+	senderWallet, existed := wallets.wallets[fromAddress]
+	if !existed {
+		return fmt.Errorf("wallet does not contain keys for address %s", fromAddress)
+	}
+	utxoMap, err := wallets.getUTXOs(fromAddress)
+	if err != nil {
+		return err
+	}
+	transferAmount := 0
+	newTxnInputs := []blockchain.TxInput{}
+	newTxnOutputs := []blockchain.TxOutput{}
+
+OuterLoop:
+	for txnID, txnOutputs := range utxoMap {
+		for _, output := range txnOutputs {
+			transferAmount += output.Value
+			newTxnInputs = append(newTxnInputs, createTxnInput([]byte(txnID), output.Index, senderWallet.PublickKey))
+			if transferAmount >= amount {
+				break OuterLoop
+			}
+		}
+	}
+
+	if transferAmount < amount {
+		return fmt.Errorf("not enough balance")
+	}
+
+	newTxnOutputs = append(newTxnOutputs, createTxnOutput(amount, toAddress))
+	if transferAmount > amount {
+		newTxnOutputs = append(newTxnOutputs, createTxnOutput(transferAmount-amount, fromAddress))
+	}
+
+	newTransaction := blockchain.Transaction{Inputs: newTxnInputs, Outputs: newTxnOutputs, Locktime: getCurrentTimeInMilliSec()}
+	wallets.signTransaction(&newTransaction, senderWallet.PrivateKey)
+	newTransaction.SetHash()
+
+	sentData := append(msgTypeToBytes(network.NEWTXN_MSG), serialize(newTransaction)...)
+
+	// Broadcast new transaction to network
+	for _, nodeAddr := range wallets.connectedNodes {
+		go func(targetAddress string) {
+			conn, err := net.DialTimeout(protocol, targetAddress, time.Second)
+			if err != nil {
+				return
+			}
+			conn.Write(sentData)
+			conn.(*net.TCPConn).CloseWrite()
+			conn.Close()
+		}(nodeAddr)
+	}
+
+	return nil
 }
 
-func (wallets *Wallets) GetBalance(address string) int {
-	return wallets.connectedChain.GetBalance(address)
+func (wallets *Wallets) signTransaction(transaction *blockchain.Transaction, privKey ecdsa.PrivateKey) {
+	for inputIndex, txnInput := range transaction.Inputs {
+		inputHash := txnInput.Hash()
+		r, s, _ := ecdsa.Sign(rand.Reader, &privKey, inputHash)
+		signature := append(r.Bytes(), s.Bytes()...)
+		transaction.Inputs[inputIndex].ScriptSig.Signature = signature
+	}
+}
+
+func (wallets *Wallets) GetBalance(walletAddress string) int {
+	accountBalance := 0
+	utxoMap, err := wallets.getUTXOs(walletAddress)
+	if err != nil {
+		fmt.Println(err.Error())
+		return 0
+	}
+	for _, txOutputs := range utxoMap {
+		for _, output := range txOutputs {
+			accountBalance += output.Value
+		}
+	}
+	return accountBalance
+}
+
+func (wallets *Wallets) getUTXOs(walletAddress string) (map[string]blockchain.TxOutputs, error) {
+	getUTXOMsg := network.GetUTXOMessage{TargetAddress: walletAddress}
+	sentData := append(msgTypeToBytes(network.GETUTXO_MSG), serialize(getUTXOMsg)...)
+
+	successFlag := make(chan bool, len(wallets.connectedNodes))
+	resultChan := make(chan map[string]blockchain.TxOutputs, len(wallets.connectedNodes))
+
+	for _, nodeAddr := range wallets.connectedNodes {
+		go func(targetAddress string) {
+			conn, err := net.DialTimeout(protocol, targetAddress, time.Second)
+			if err != nil {
+				return
+			}
+			conn.Write(sentData)
+			conn.(*net.TCPConn).CloseWrite()
+
+			resp, er := io.ReadAll(conn)
+			if er != nil {
+				return
+			}
+			defer conn.Close()
+			var utxoMap map[string]blockchain.TxOutputs
+			genericDeserialize(resp, &utxoMap)
+			successFlag <- true
+			resultChan <- utxoMap
+		}(nodeAddr)
+	}
+
+	var utxoMap map[string]blockchain.TxOutputs
+	var loopCounter int
+	var didRequestSucceed bool
+
+OuterLoop:
+	for {
+		time.Sleep(200 * time.Millisecond)
+		select {
+		case <-successFlag:
+			utxoMap = <-resultChan
+			didRequestSucceed = true
+			break OuterLoop
+		default:
+			loopCounter++
+		}
+		if loopCounter > 10 {
+			break OuterLoop
+		}
+	}
+
+	if didRequestSucceed {
+		return utxoMap, nil
+	}
+
+	return nil, fmt.Errorf("can not query UTXOs for %s", walletAddress)
 }
