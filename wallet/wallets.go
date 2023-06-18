@@ -20,15 +20,18 @@ const (
 	msgTypeLength  = 12
 )
 
-var initialConnectedNodes = []string{"localhost:8333", "localhost:8334", "localhost:8335"}
+type NetworkNode struct {
+	nodeType string
+	address  string
+}
 
 type Wallets struct {
-	connectedNodes []string
+	connectedNodes []NetworkNode
 	wallets        map[string]Wallet
 }
 
-func (wallets *Wallets) ConnectNode(nodeAddress string) {
-	wallets.connectedNodes = append(wallets.connectedNodes, nodeAddress)
+func (wallets *Wallets) ConnectNode(nodeType, address string) {
+	wallets.connectedNodes = append(wallets.connectedNodes, NetworkNode{nodeType, address})
 }
 
 func (wallets *Wallets) GetWallet(address string) Wallet {
@@ -69,7 +72,7 @@ func LoadWallets() *Wallets {
 		wallets[key] = wallet
 	}
 
-	return &Wallets{initialConnectedNodes, wallets}
+	return &Wallets{wallets: wallets}
 }
 
 func (wallets *Wallets) SaveFile() {
@@ -118,7 +121,7 @@ OuterLoop:
 	sentData := append(msgTypeToBytes(network.NEWTXN_MSG), serialize(newTransaction)...)
 
 	// Broadcast new transaction to network
-	for _, nodeAddr := range wallets.connectedNodes {
+	for _, connectedNode := range wallets.connectedNodes {
 		go func(targetAddress string) {
 			conn, err := net.DialTimeout(protocol, targetAddress, time.Second)
 			if err != nil {
@@ -127,7 +130,7 @@ OuterLoop:
 			conn.Write(sentData)
 			conn.(*net.TCPConn).CloseWrite()
 			conn.Close()
-		}(nodeAddr)
+		}(connectedNode.address)
 	}
 
 	return nil
@@ -164,7 +167,7 @@ func (wallets *Wallets) getUTXOs(walletAddress string) (map[string]blockchain.Tx
 	successFlag := make(chan bool, len(wallets.connectedNodes))
 	resultChan := make(chan map[string]blockchain.TxOutputs, len(wallets.connectedNodes))
 
-	for _, nodeAddr := range wallets.connectedNodes {
+	for _, connectedNode := range wallets.connectedNodes {
 		go func(targetAddress string) {
 			conn, err := net.DialTimeout(protocol, targetAddress, time.Second)
 			if err != nil {
@@ -182,7 +185,7 @@ func (wallets *Wallets) getUTXOs(walletAddress string) (map[string]blockchain.Tx
 			genericDeserialize(resp, &utxoMap)
 			successFlag <- true
 			resultChan <- utxoMap
-		}(nodeAddr)
+		}(connectedNode.address)
 	}
 
 	var utxoMap map[string]blockchain.TxOutputs
@@ -210,4 +213,22 @@ OuterLoop:
 	}
 
 	return nil, fmt.Errorf("can not query UTXOs for %s", walletAddress)
+}
+
+func (wallets *Wallets) AddWalletAddrToSPVNodes(walletAddress string) {
+	newAddrMsg := network.NewAddrMessage{WalletAddress: walletAddress}
+	sentData := append(msgTypeToBytes(network.NEWADDR_MSG), serialize(newAddrMsg)...)
+	for _, connectedNode := range wallets.connectedNodes {
+		if connectedNode.nodeType == network.SPV {
+			go func(targetAddress string) {
+				conn, err := net.DialTimeout(protocol, targetAddress, time.Second)
+				if err != nil {
+					return
+				}
+				conn.Write(sentData)
+				conn.(*net.TCPConn).CloseWrite()
+				conn.Close()
+			}(connectedNode.address)
+		}
+	}
 }

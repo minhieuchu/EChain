@@ -19,6 +19,7 @@ const (
 	HEADERDATA_MSG = "headerdata"
 	GETUTXO_MSG    = "getutxo"
 	NEWTXN_MSG     = "newtxn"
+	NEWADDR_MSG    = "newaddr"
 )
 
 const (

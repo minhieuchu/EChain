@@ -13,7 +13,8 @@ import (
 
 type SPVNode struct {
 	P2PNode
-	BlockChainHeader *blockchain.BlockChainHeader
+	BlockChainHeader   *blockchain.BlockChainHeader
+	monitorAddrList []string // list of wallet addresses monitored by SPV node
 }
 
 func NewSPVNode(networkAddress string) *SPVNode {
@@ -82,9 +83,17 @@ func (node *SPVNode) handleConnection(conn net.Conn) {
 		node.handleGetheadersMsg(payload)
 	case HEADERS_MSG:
 		node.handleHeadersMsg(payload)
+	case NEWADDR_MSG:
+		node.handleNewAddrMsg(payload)
 	default:
 		fmt.Println("invalid message")
 	}
+}
+
+func (node *SPVNode) handleNewAddrMsg(msg []byte) {
+	var newAddrMsg NewAddrMessage
+	genericDeserialize(msg, &newAddrMsg)
+	node.monitorAddrList = append(node.monitorAddrList, newAddrMsg.WalletAddress)
 }
 
 func (node *SPVNode) handleHeadersMsg(msg []byte) {
