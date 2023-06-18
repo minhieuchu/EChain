@@ -44,7 +44,7 @@ func (node *FullNode) sendAddrMsg(toAddress string) {
 
 func (node *FullNode) sendVerackMsg(toAddress string) {
 	fmt.Println("Send Verack msg from", node.NetworkAddress, "to", toAddress)
-	verackMsg := VerackMessage{node.NetworkAddress}
+	verackMsg := VerackMessage{FULLNODE, node.NetworkAddress}
 	sentData := append(msgTypeToBytes(VERACK_MSG), serialize(verackMsg)...)
 	sendMessage(toAddress, sentData)
 }
@@ -195,8 +195,8 @@ func (node *FullNode) handleInvMsg(msg []byte) {
 	node.getdataMessageCount = messageCount
 	wg.Add(messageCount)
 
-	for peerIndex, peerAddr := range node.connectedPeers {
-		if peerIndex >= messageCount {
+	for index, connectedNode := range node.connectedPeers {
+		if index >= messageCount {
 			break
 		}
 		go func(toAddress string) {
@@ -212,14 +212,14 @@ func (node *FullNode) handleInvMsg(msg []byte) {
 				node.sendGetdataMessage(toAddress, &getdataMsg)
 				wg.Done()
 			}
-		}(peerAddr)
+		}(connectedNode.Address)
 	}
 	wg.Wait()
 	time.Sleep(3 * time.Second) // Wait for all blockdata messages to be processed
 	utxoSet := node.Blockchain.UTXOSet()
 	utxoSet.ReIndex()
-	for _, peerAddr := range node.connectedPeers {
-		node.sendGetBlocksMsg(peerAddr)
+	for _, connectedNode := range node.connectedPeers {
+		node.sendGetBlocksMsg(connectedNode.Address)
 	}
 }
 
@@ -240,7 +240,7 @@ func (node *FullNode) handleVersionMsg(msg []byte) {
 
 	if node.Version == versionMsg.Version {
 		node.sendVerackMsg(versionMsg.AddrMe)
-		if !slices.Contains(node.connectedPeers, versionMsg.AddrMe) {
+		if !slices.Contains(node.getConnectedNodeAddresses(), versionMsg.AddrMe) {
 			node.sendVersionMsg(versionMsg.AddrMe)
 		}
 	}
@@ -250,10 +250,10 @@ func (node *FullNode) handleVerackMsg(msg []byte) {
 	var verackMsg VerackMessage
 	genericDeserialize(msg, &verackMsg)
 
-	if slices.Contains(node.connectedPeers, verackMsg.AddrFrom) {
+	if slices.Contains(node.getConnectedNodeAddresses(), verackMsg.AddrFrom) {
 		return
 	}
-	node.connectedPeers = append(node.connectedPeers, verackMsg.AddrFrom)
+	node.connectedPeers = append(node.connectedPeers, NodeInfo{verackMsg.NodeType, verackMsg.AddrFrom})
 	node.sendAddrMsg(verackMsg.AddrFrom)
 	node.sendGetBlocksMsg(verackMsg.AddrFrom)
 }
@@ -262,16 +262,16 @@ func (node *FullNode) handleAddrMsg(msg []byte) {
 	var addrMsg AddrMessage
 	genericDeserialize(msg, &addrMsg)
 
-	if !slices.Contains(node.connectedPeers, addrMsg.Address) {
+	if !slices.Contains(node.getConnectedNodeAddresses(), addrMsg.Address) {
 		node.sendVersionMsg(addrMsg.Address)
 	}
 
 	if !slices.Contains(node.forwardedAddrList, addrMsg.Address) {
 		node.forwardedAddrList = append(node.forwardedAddrList, addrMsg.Address)
-		for _, peerAddr := range node.connectedPeers {
-			if peerAddr != addrMsg.Address {
+		for _, connectedNode := range node.connectedPeers {
+			if connectedNode.Address != addrMsg.Address {
 				sentData := append(msgTypeToBytes(ADDR_MSG), msg...)
-				sendMessage(peerAddr, sentData)
+				sendMessage(connectedNode.Address, sentData)
 			}
 		}
 	}
@@ -291,7 +291,7 @@ func (node *FullNode) handleNewTxnMsg(msg []byte) {
 	totalInputAmount := 0
 	var newTransaction blockchain.Transaction
 	genericDeserialize(msg, &newTransaction)
-	
+
 	// Step 1: Check if transaction inputs reference valid UTXOs &
 	// check if input signature works with output's locking script
 	for _, txnInput := range newTransaction.Inputs {
@@ -332,8 +332,8 @@ func (node *FullNode) handleNewTxnMsg(msg []byte) {
 
 	// Step 3: Replay transaction to network
 	// Todo: Add to current node's mempool
-	for _, nodeAddr := range node.connectedPeers {
-		node.sendNewTxnMessage(nodeAddr, &NewTxnMessage{newTransaction})
+	for _, connectedNode := range node.connectedPeers {
+		node.sendNewTxnMessage(connectedNode.Address, &NewTxnMessage{newTransaction})
 	}
 }
 

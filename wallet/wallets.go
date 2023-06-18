@@ -20,18 +20,13 @@ const (
 	msgTypeLength  = 12
 )
 
-type NetworkNode struct {
-	nodeType string
-	address  string
-}
-
 type Wallets struct {
-	connectedNodes []NetworkNode
+	connectedNodes []network.NodeInfo
 	wallets        map[string]Wallet
 }
 
 func (wallets *Wallets) ConnectNode(nodeType, address string) {
-	wallets.connectedNodes = append(wallets.connectedNodes, NetworkNode{nodeType, address})
+	wallets.connectedNodes = append(wallets.connectedNodes, network.NodeInfo{NodeType: nodeType, Address: address})
 }
 
 func (wallets *Wallets) GetWallet(address string) Wallet {
@@ -130,7 +125,7 @@ OuterLoop:
 			conn.Write(sentData)
 			conn.(*net.TCPConn).CloseWrite()
 			conn.Close()
-		}(connectedNode.address)
+		}(connectedNode.Address)
 	}
 
 	return nil
@@ -185,7 +180,7 @@ func (wallets *Wallets) getUTXOs(walletAddress string) (map[string]blockchain.Tx
 			genericDeserialize(resp, &utxoMap)
 			successFlag <- true
 			resultChan <- utxoMap
-		}(connectedNode.address)
+		}(connectedNode.Address)
 	}
 
 	var utxoMap map[string]blockchain.TxOutputs
@@ -219,7 +214,7 @@ func (wallets *Wallets) AddWalletAddrToSPVNodes(walletAddress string) {
 	newAddrMsg := network.NewAddrMessage{WalletAddress: walletAddress}
 	sentData := append(msgTypeToBytes(network.NEWADDR_MSG), serialize(newAddrMsg)...)
 	for _, connectedNode := range wallets.connectedNodes {
-		if connectedNode.nodeType == network.SPV {
+		if connectedNode.NodeType == network.SPV {
 			go func(targetAddress string) {
 				conn, err := net.DialTimeout(protocol, targetAddress, time.Second)
 				if err != nil {
@@ -228,7 +223,7 @@ func (wallets *Wallets) AddWalletAddrToSPVNodes(walletAddress string) {
 				conn.Write(sentData)
 				conn.(*net.TCPConn).CloseWrite()
 				conn.Close()
-			}(connectedNode.address)
+			}(connectedNode.Address)
 		}
 	}
 }

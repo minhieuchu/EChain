@@ -13,8 +13,8 @@ import (
 
 type SPVNode struct {
 	P2PNode
-	BlockChainHeader   *blockchain.BlockChainHeader
-	monitorAddrList []string // list of wallet addresses monitored by SPV node
+	BlockChainHeader *blockchain.BlockChainHeader
+	monitorAddrList  []string // list of wallet addresses monitored by SPV node
 }
 
 func NewSPVNode(networkAddress string) *SPVNode {
@@ -46,7 +46,7 @@ func (node *SPVNode) sendVersionMsg(toAddress string) {
 
 func (node *SPVNode) sendVerackMsg(toAddress string) {
 	fmt.Println("Send Verack msg from", node.NetworkAddress, "to", toAddress)
-	verackMsg := VerackMessage{node.NetworkAddress}
+	verackMsg := VerackMessage{SPV, node.NetworkAddress}
 	sentData := append(msgTypeToBytes(VERACK_MSG), serialize(verackMsg)...)
 	sendMessage(toAddress, sentData)
 }
@@ -133,7 +133,7 @@ func (node *SPVNode) handleVersionMsg(msg []byte) {
 
 	if node.Version == versionMsg.Version {
 		node.sendVerackMsg(versionMsg.AddrMe)
-		if !slices.Contains(node.connectedPeers, versionMsg.AddrMe) {
+		if !slices.Contains(node.getConnectedNodeAddresses(), versionMsg.AddrMe) {
 			node.sendVersionMsg(versionMsg.AddrMe)
 		}
 	}
@@ -143,10 +143,10 @@ func (node *SPVNode) handleVerackMsg(msg []byte) {
 	var verackMsg VerackMessage
 	genericDeserialize(msg, &verackMsg)
 
-	if slices.Contains(node.connectedPeers, verackMsg.AddrFrom) {
+	if slices.Contains(node.getConnectedNodeAddresses(), verackMsg.AddrFrom) {
 		return
 	}
-	node.connectedPeers = append(node.connectedPeers, verackMsg.AddrFrom)
+	node.connectedPeers = append(node.connectedPeers, NodeInfo{verackMsg.NodeType, verackMsg.AddrFrom})
 	node.sendAddrMsg(verackMsg.AddrFrom)
 	node.sendGetheadersMsg(verackMsg.AddrFrom)
 }
@@ -155,16 +155,16 @@ func (node *SPVNode) handleAddrMsg(msg []byte) {
 	var addrMsg AddrMessage
 	genericDeserialize(msg, &addrMsg)
 
-	if !slices.Contains(node.connectedPeers, addrMsg.Address) {
+	if !slices.Contains(node.getConnectedNodeAddresses(), addrMsg.Address) {
 		node.sendVersionMsg(addrMsg.Address)
 	}
 
 	if !slices.Contains(node.forwardedAddrList, addrMsg.Address) {
 		node.forwardedAddrList = append(node.forwardedAddrList, addrMsg.Address)
 		for _, peerAddr := range node.connectedPeers {
-			if peerAddr != addrMsg.Address {
+			if peerAddr.Address != addrMsg.Address {
 				sentData := append(msgTypeToBytes(ADDR_MSG), msg...)
-				sendMessage(peerAddr, sentData)
+				sendMessage(peerAddr.Address, sentData)
 			}
 		}
 	}

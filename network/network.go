@@ -34,10 +34,15 @@ const (
 	MAX_BLOCKS_IN_TRANSIT_PER_PEER = 10
 )
 
+type NodeInfo struct {
+	NodeType string
+	Address  string
+}
+
 type P2PNode struct {
 	Version           int
 	NetworkAddress    string
-	connectedPeers    []string
+	connectedPeers    []NodeInfo
 	forwardedAddrList []string
 }
 
@@ -50,4 +55,12 @@ type Node interface {
 	handleAddrMsg([]byte)
 	handleConnection(net.Conn)
 	StartP2PNode()
+}
+
+func (node *P2PNode) getConnectedNodeAddresses() []string {
+	var addrList []string
+	for _, connectedNode := range node.connectedPeers {
+		addrList = append(addrList, connectedNode.Address)
+	}
+	return addrList
 }

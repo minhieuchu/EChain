@@ -10,6 +10,7 @@ type VersionMessage struct {
 }
 
 type VerackMessage struct {
+	NodeType string
 	AddrFrom string
 }
 
