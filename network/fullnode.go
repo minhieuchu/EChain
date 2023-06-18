@@ -334,7 +334,14 @@ func (node *FullNode) handleNewTxnMsg(msg []byte) {
 	// Step 3: Replay transaction to network
 	// Todo: Add to current node's mempool
 	for _, connectedNode := range node.connectedPeers {
-		node.sendNewTxnMessage(connectedNode.Address, &NewTxnMessage{newTransaction})
+		if connectedNode.NodeType == FULLNODE || connectedNode.NodeType == MINER {
+			node.sendNewTxnMessage(connectedNode.Address, &NewTxnMessage{newTransaction})
+		} else if connectedNode.NodeType == SPV {
+			bloomFilter := node.connectedSpvBloomFilters[connectedNode.Address]
+			if isTransactionOfInterest(newTransaction, bloomFilter) {
+				node.sendNewTxnMessage(connectedNode.Address, &NewTxnMessage{newTransaction})
+			}
+		}
 	}
 }
 
