@@ -15,6 +15,7 @@ type SPVNode struct {
 	P2PNode
 	BlockChainHeader *blockchain.BlockChainHeader
 	monitorAddrList  []string // list of wallet addresses monitored by SPV node
+	bloomFilter      []string
 }
 
 func NewSPVNode(networkAddress string) *SPVNode {
@@ -65,6 +66,13 @@ func (node *SPVNode) sendHeaderMessage(toAddress string, headerMsg *HeaderMessag
 	sendMessage(toAddress, sentData)
 }
 
+func (node *SPVNode) sendFilterloadMsg(toAddress string) {
+	fmt.Println("Send filterload msg from", node.NetworkAddress, "to", toAddress)
+	filterloadMsg := FilterloadMessage{node.NetworkAddress, node.bloomFilter}
+	sentData := append(msgTypeToBytes(FILTERLOAD_MSG), serialize(filterloadMsg)...)
+	sendMessage(toAddress, sentData)
+}
+
 func (node *SPVNode) handleConnection(conn net.Conn) {
 	data, err := io.ReadAll(conn)
 	defer conn.Close()
@@ -94,6 +102,12 @@ func (node *SPVNode) handleNewAddrMsg(msg []byte) {
 	var newAddrMsg NewAddrMessage
 	genericDeserialize(msg, &newAddrMsg)
 	node.monitorAddrList = append(node.monitorAddrList, newAddrMsg.WalletAddress)
+	node.updateBloomFilter()
+	for _, peerNode := range node.connectedPeers {
+		if peerNode.NodeType == FULLNODE {
+			node.sendFilterloadMsg(peerNode.Address)
+		}
+	}
 }
 
 func (node *SPVNode) handleHeadersMsg(msg []byte) {
@@ -168,6 +182,11 @@ func (node *SPVNode) handleAddrMsg(msg []byte) {
 			}
 		}
 	}
+}
+
+func (node *SPVNode) updateBloomFilter() {
+	// Todo: Implement a realistic bloom filter
+	node.bloomFilter = node.monitorAddrList
 }
 
 func (node *SPVNode) StartP2PNode() {

@@ -20,6 +20,7 @@ const (
 	GETUTXO_MSG    = "getutxo"
 	NEWTXN_MSG     = "newtxn"
 	NEWADDR_MSG    = "newaddr"
+	FILTERLOAD_MSG = "filterload"
 )
 
 const (

@@ -58,3 +58,8 @@ type NewTxnMessage struct {
 type NewAddrMessage struct {
 	WalletAddress string // address sent by wallet application to SPV nodes to be added to the monitored list in the nodes
 }
+
+type FilterloadMessage struct {
+	AddrFrom    string
+	BloomFilter []string
+}

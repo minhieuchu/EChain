@@ -17,8 +17,9 @@ import (
 
 type FullNode struct {
 	P2PNode
-	Blockchain          *blockchain.BlockChain
-	getdataMessageCount int
+	Blockchain               *blockchain.BlockChain
+	connectedSpvBloomFilters map[string][]string
+	getdataMessageCount      int
 }
 
 func NewFullNode(networkAddress, walletAddress string) *FullNode {
@@ -337,6 +338,12 @@ func (node *FullNode) handleNewTxnMsg(msg []byte) {
 	}
 }
 
+func (node *FullNode) handleFilterloadMsg(msg []byte) {
+	var filterloadMsg FilterloadMessage
+	genericDeserialize(msg, &filterloadMsg)
+	node.connectedSpvBloomFilters[filterloadMsg.AddrFrom] = filterloadMsg.BloomFilter
+}
+
 func (node *FullNode) handleConnection(conn net.Conn) {
 	data, err := io.ReadAll(conn)
 	defer conn.Close()
@@ -365,6 +372,8 @@ func (node *FullNode) handleConnection(conn net.Conn) {
 		node.handeGetUTXOMsg(conn, payload)
 	case NEWTXN_MSG:
 		node.handleNewTxnMsg(payload)
+	case FILTERLOAD_MSG:
+		node.handleFilterloadMsg(payload)
 	default:
 		fmt.Println("invalid message")
 	}
