@@ -84,6 +84,12 @@ func genericDeserialize[T any](data []byte, target *T) {
 	decoder.Decode(target)
 }
 
+func getDoubleSHA256(data []byte) []byte {
+	firstHash := sha256.Sum256(data)
+	secondHash := sha256.Sum256(firstHash[:])
+	return secondHash[:]
+}
+
 func handleErr(err error) {
 	if err != nil {
 		log.Panic(err)

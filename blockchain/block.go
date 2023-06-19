@@ -2,7 +2,6 @@ package blockchain
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/gob"
 	"math/big"
 	"os"
@@ -38,12 +37,13 @@ func (block *Block) Mine() {
 }
 
 func (blockHeader *BlockHeader) GetHash() []byte {
-	firstHash := sha256.Sum256(serialize(blockHeader))
-	secondHash := sha256.Sum256(firstHash[:])
-	return secondHash[:]
+	return getDoubleSHA256(serialize(blockHeader))
 }
 
 func (block *Block) GetHash() []byte {
+	if len(block.MerkleRoot) == 0 {
+		block.SetMerkleRoot()
+	}
 	return block.BlockHeader.GetHash()
 }
 
