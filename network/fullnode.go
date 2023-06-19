@@ -339,6 +339,7 @@ func (node *FullNode) handleNewTxnMsg(msg []byte) {
 		} else if connectedNode.NodeType == SPV {
 			bloomFilter := node.connectedSpvBloomFilters[connectedNode.Address]
 			if isTransactionOfInterest(newTransaction, bloomFilter) {
+				// Todo: Send merkleblock message containing block header, merkle path and transaction
 				node.sendNewTxnMessage(connectedNode.Address, &NewTxnMessage{newTransaction})
 			}
 		}
