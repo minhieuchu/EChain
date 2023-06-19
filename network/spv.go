@@ -8,25 +8,33 @@ import (
 	"net"
 	"time"
 
+	"github.com/syndtr/goleveldb/leveldb"
 	"golang.org/x/exp/slices"
 )
 
 type SPVNode struct {
 	P2PNode
-	BlockChainHeader *blockchain.BlockChainHeader
+	blockChainHeader *blockchain.BlockChainHeader
+	database         *leveldb.DB
 	monitorAddrList  []string // list of wallet addresses monitored by SPV node
 	bloomFilter      []string
 }
 
 func NewSPVNode(networkAddress string) *SPVNode {
-	localBlockchainHeader := blockchain.InitBlockChainHeader(networkAddress)
+	db, err := leveldb.OpenFile("storage/"+networkAddress, nil)
+	if err != nil {
+		fmt.Println("can not start database at", networkAddress)
+		return nil
+	}
+	localBlockchainHeader := blockchain.InitBlockChainHeader(db)
 	p2pNode := P2PNode{
 		Version:        1,
 		NetworkAddress: networkAddress,
 	}
 	return &SPVNode{
 		P2PNode:          p2pNode,
-		BlockChainHeader: localBlockchainHeader,
+		blockChainHeader: localBlockchainHeader,
+		database:         db,
 	}
 }
 
@@ -39,7 +47,7 @@ func (node *SPVNode) sendAddrMsg(toAddress string) {
 
 func (node *SPVNode) sendVersionMsg(toAddress string) {
 	fmt.Println("Send Version msg from", node.NetworkAddress, "to", toAddress)
-	nBestHeight := node.BlockChainHeader.GetHeight()
+	nBestHeight := node.blockChainHeader.GetHeight()
 	versionMsg := VersionMessage{node.Version, toAddress, node.NetworkAddress, nBestHeight}
 	sentData := append(msgTypeToBytes(VERSION_MSG), serialize(versionMsg)...)
 	sendMessage(toAddress, sentData)
@@ -54,7 +62,7 @@ func (node *SPVNode) sendVerackMsg(toAddress string) {
 
 func (node *SPVNode) sendGetheadersMsg(toAddress string) {
 	fmt.Println("Send Getheaders msg from", node.NetworkAddress, "to", toAddress)
-	lastHeaderHash := node.BlockChainHeader.LastHash
+	lastHeaderHash := node.blockChainHeader.LastHash
 	getheadersMsg := GetheadersMessage{lastHeaderHash, node.NetworkAddress}
 	sentData := append(msgTypeToBytes(GETHEADERS_MSG), serialize(getheadersMsg)...)
 	sendMessage(toAddress, sentData)
@@ -93,9 +101,51 @@ func (node *SPVNode) handleConnection(conn net.Conn) {
 		node.handleHeadersMsg(payload)
 	case NEWADDR_MSG:
 		node.handleNewAddrMsg(payload)
+	case NEWTXN_MSG:
+		node.handleNewTxnMsg(payload)
 	default:
 		fmt.Println("invalid message")
 	}
+}
+
+func (node *SPVNode) handleNewTxnMsg(msg []byte) {
+	var newTxnMsg NewTxnMessage
+	genericDeserialize(msg, &newTxnMsg)
+	// Todo: Verify new transaction with Merkle proof from fullnodes
+	utxoSet := node.blockChainHeader.UTXOSet()
+	filteredInputs := []blockchain.TxInput{}
+	filteredOutputs := []blockchain.TxOutput{}
+	for _, txInput := range newTxnMsg.Transaction.Inputs {
+		if node.isTxnInputOfInterest(&txInput) {
+			filteredInputs = append(filteredInputs, txInput)
+		}
+	}
+	for _, txOutput := range newTxnMsg.Transaction.Outputs {
+		if node.isTxnOutputOfInterest(&txOutput) {
+			filteredOutputs = append(filteredOutputs, txOutput)
+		}
+	}
+	newTxnMsg.Transaction.Inputs = filteredInputs
+	newTxnMsg.Transaction.Outputs = filteredOutputs
+	utxoSet.UpdateWithNewTransaction(&newTxnMsg.Transaction)
+}
+
+func (node *SPVNode) isTxnInputOfInterest(txnInput *blockchain.TxInput) bool {
+	for _, targetAddr := range node.monitorAddrList {
+		if txnInput.IsSignedBy(targetAddr) {
+			return true
+		}
+	}
+	return false
+}
+
+func (node *SPVNode) isTxnOutputOfInterest(txnOutput *blockchain.TxOutput) bool {
+	for _, targetAddr := range node.monitorAddrList {
+		if txnOutput.IsBoundTo(targetAddr) {
+			return true
+		}
+	}
+	return false
 }
 
 func (node *SPVNode) handleNewAddrMsg(msg []byte) {
@@ -115,9 +165,9 @@ func (node *SPVNode) handleHeadersMsg(msg []byte) {
 	genericDeserialize(msg, &headerMsg)
 
 	for _, header := range headerMsg.HeaderList {
-		node.BlockChainHeader.SetHeader(header)
+		node.blockChainHeader.SetHeader(header)
 	}
-	node.BlockChainHeader.SetLastHash(headerMsg.HeaderList[len(headerMsg.HeaderList)-1].GetHash())
+	node.blockChainHeader.SetLastHash(headerMsg.HeaderList[len(headerMsg.HeaderList)-1].GetHash())
 }
 
 func (node *SPVNode) handleGetheadersMsg(msg []byte) {
@@ -125,7 +175,7 @@ func (node *SPVNode) handleGetheadersMsg(msg []byte) {
 	genericDeserialize(msg, &getheadersMsg)
 
 	remoteLastHeaderHash := getheadersMsg.TopHeaderHash
-	headerExisted, unmatchedHeaders := node.BlockChainHeader.GetUnmatchedHeaders(remoteLastHeaderHash)
+	headerExisted, unmatchedHeaders := node.blockChainHeader.GetUnmatchedHeaders(remoteLastHeaderHash)
 	if headerExisted && len(unmatchedHeaders) > 0 {
 		headerList := []*blockchain.BlockHeader{}
 		for i := len(unmatchedHeaders) - 1; i >= 0; i-- {
@@ -187,6 +237,10 @@ func (node *SPVNode) handleAddrMsg(msg []byte) {
 func (node *SPVNode) updateBloomFilter() {
 	// Todo: Implement a realistic bloom filter
 	node.bloomFilter = node.monitorAddrList
+}
+
+func (node *SPVNode) GetHeaderHeight() int {
+	return node.blockChainHeader.GetHeight()
 }
 
 func (node *SPVNode) StartP2PNode() {

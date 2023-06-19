@@ -3,7 +3,6 @@ package blockchain
 import (
 	"crypto/ecdsa"
 	"errors"
-	"fmt"
 	"log"
 	"time"
 
@@ -45,14 +44,9 @@ func InitBlockChain(networkAddress, walletAddress string) *BlockChain {
 	return &blockchain
 }
 
-func InitBlockChainHeader(networkAddress string) *BlockChainHeader {
-	db, err := leveldb.OpenFile("storage/"+networkAddress, nil)
-	if err != nil {
-		fmt.Println("can not start database at", networkAddress)
-		return nil
-	}
+func InitBlockChainHeader(database *leveldb.DB) *BlockChainHeader {
 	blockchainHeader := BlockChainHeader{
-		DataBase: db,
+		DataBase: database,
 	}
 	genesisBlock := GenerateGenesisBlock()
 	blockchainHeader.LastHash = genesisBlock.GetHash()
@@ -64,6 +58,10 @@ func InitBlockChainHeader(networkAddress string) *BlockChainHeader {
 func (chainIterator *BlockChainIterator) CurrentBlock() *Block {
 	encodedBlock, _ := chainIterator.DataBase.Get(chainIterator.CurrentHash, nil)
 	return DeserializeBlock(encodedBlock)
+}
+
+func (blockchainHeader *BlockChainHeader) UTXOSet() UTXOSet {
+	return UTXOSet{blockchainHeader.DataBase}
 }
 
 func (blockchainHeader *BlockChainHeader) GetHeight() int {
@@ -150,7 +148,7 @@ func (blockchain *BlockChain) StoreNewBlock(block *Block) {
 	blockchain.DataBase.Put([]byte(LAST_HASH_STOGAGE_KEY), blockchain.LastHash, nil)
 
 	utxoSet := blockchain.UTXOSet()
-	utxoSet.Update(block)
+	utxoSet.UpdateWithNewBlock(block)
 }
 
 func (blockchain *BlockChain) getTransactionMapFromInputs(transaction Transaction) map[string]Transaction {

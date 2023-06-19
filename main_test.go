@@ -41,7 +41,7 @@ func TestBlockHeaderHeightSPVNode( t *testing.T) {
 		spvNode := network.NewSPVNode("localhost:8888")
 		go func() {
 			time.Sleep(3 * time.Second)
-			blockHeaderHeight = spvNode.BlockChainHeader.GetHeight()
+			blockHeaderHeight = spvNode.GetHeaderHeight()
 			wg.Done()
 		}()
 		spvNode.StartP2PNode()
