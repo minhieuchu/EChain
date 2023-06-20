@@ -64,7 +64,7 @@ type FilterloadMessage struct {
 	BloomFilter []string
 }
 
-type MerkleBlock struct {
+type MerkleBlockMessage struct {
 	// Merkeblock message also contains transaction data for simplicity,
 	// instead of sending a separate txn message after merkleblock message
 	BlockHeader blockchain.BlockHeader

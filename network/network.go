@@ -7,20 +7,21 @@ import (
 var initialPeers = []string{"localhost:8333", "localhost:8334", "localhost:8335"}
 
 const (
-	VERSION_MSG    = "version"
-	VERACK_MSG     = "verack"
-	ADDR_MSG       = "addr"
-	GETBLOCKS_MSG  = "getblocks"
-	INV_MSG        = "inv"
-	HEADERS_MSG    = "headers"
-	GETDATA_MSG    = "getdata"
-	GETHEADERS_MSG = "getheaders"
-	BLOCKDATA_MSG  = "blockdata"
-	HEADERDATA_MSG = "headerdata"
-	GETUTXO_MSG    = "getutxo"
-	NEWTXN_MSG     = "newtxn"
-	NEWADDR_MSG    = "newaddr"
-	FILTERLOAD_MSG = "filterload"
+	VERSION_MSG     = "version"
+	VERACK_MSG      = "verack"
+	ADDR_MSG        = "addr"
+	GETBLOCKS_MSG   = "getblocks"
+	INV_MSG         = "inv"
+	HEADERS_MSG     = "headers"
+	GETDATA_MSG     = "getdata"
+	GETHEADERS_MSG  = "getheaders"
+	BLOCKDATA_MSG   = "blockdata"
+	HEADERDATA_MSG  = "headerdata"
+	GETUTXO_MSG     = "getutxo"
+	NEWTXN_MSG      = "newtxn"
+	NEWADDR_MSG     = "newaddr"
+	FILTERLOAD_MSG  = "filterload"
+	MERKLEBLOCK_MSG = "merkleblock"
 )
 
 const (

@@ -15,11 +15,13 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+const NEWBLOCK_FROM_MINER_INDEX = -1
+
 type FullNode struct {
 	P2PNode
-	Blockchain               *blockchain.BlockChain
-	connectedSpvBloomFilters map[string][]string
-	getdataMessageCount      int
+	Blockchain                 *blockchain.BlockChain
+	connectedSpvBloomFilterMap map[string][]string
+	getdataMessageCount        int
 }
 
 func NewFullNode(networkAddress, walletAddress string) *FullNode {
@@ -119,6 +121,12 @@ func (node *FullNode) sendHeaderMessage(toAddress string, headerMsg *HeaderMessa
 func (node *FullNode) sendNewTxnMessage(toAddress string, newTxnMsg *NewTxnMessage) {
 	fmt.Println("Send NewTxn msg from", node.NetworkAddress, "to", toAddress)
 	sentData := append(msgTypeToBytes(NEWTXN_MSG), serialize(newTxnMsg)...)
+	sendMessage(toAddress, sentData)
+}
+
+func (node *FullNode) sendMerkleblockMessage(toAddress string, merkleblockMsg *MerkleBlockMessage) {
+	fmt.Println("Send Merkleblock msg from", node.NetworkAddress, "to", toAddress)
+	sentData := append(msgTypeToBytes(MERKLEBLOCK_MSG), serialize(merkleblockMsg)...)
 	sendMessage(toAddress, sentData)
 }
 
@@ -227,6 +235,32 @@ func (node *FullNode) handleInvMsg(msg []byte) {
 func (node *FullNode) handleBlockdataMsg(msg []byte) {
 	var blockdataMsg BlockdataMessage
 	genericDeserialize(msg, &blockdataMsg)
+	if blockdataMsg.Index == NEWBLOCK_FROM_MINER_INDEX {
+		newBlock := blockdataMsg.BlockList[0]
+		// Step 1: Verify newly mined block received from miner node
+
+		// Step 2: Store new block to local blockchain
+
+		// Step 3: Relay new block to other full nodes
+
+		// Step 4: Filter transactions of interest of connected SPV nodes using Bloom filter and send merkleblock message
+		for _, transaction := range newBlock.Transactions {
+			for _, connectedNode := range node.connectedPeers {
+				if connectedNode.NodeType == SPV {
+					bloomFilter := node.connectedSpvBloomFilterMap[connectedNode.Address]
+					if isTransactionOfInterest(*transaction, bloomFilter) {
+						merkleblockMsg := MerkleBlockMessage{
+							BlockHeader: newBlock.BlockHeader,
+							MerklePath:  newBlock.GetMerklePath(transaction),
+							Transaction: *transaction,
+						}
+						node.sendMerkleblockMessage(connectedNode.Address, &merkleblockMsg)
+					}
+				}
+			}
+		}
+		return
+	}
 	for _, block := range blockdataMsg.BlockList {
 		node.Blockchain.SetBlock(block)
 	}
@@ -336,12 +370,6 @@ func (node *FullNode) handleNewTxnMsg(msg []byte) {
 	for _, connectedNode := range node.connectedPeers {
 		if connectedNode.NodeType == FULLNODE || connectedNode.NodeType == MINER {
 			node.sendNewTxnMessage(connectedNode.Address, &NewTxnMessage{newTransaction})
-		} else if connectedNode.NodeType == SPV {
-			bloomFilter := node.connectedSpvBloomFilters[connectedNode.Address]
-			if isTransactionOfInterest(newTransaction, bloomFilter) {
-				// Todo: Send merkleblock message containing block header, merkle path and transaction
-				node.sendNewTxnMessage(connectedNode.Address, &NewTxnMessage{newTransaction})
-			}
 		}
 	}
 }
@@ -349,7 +377,7 @@ func (node *FullNode) handleNewTxnMsg(msg []byte) {
 func (node *FullNode) handleFilterloadMsg(msg []byte) {
 	var filterloadMsg FilterloadMessage
 	genericDeserialize(msg, &filterloadMsg)
-	node.connectedSpvBloomFilters[filterloadMsg.AddrFrom] = filterloadMsg.BloomFilter
+	node.connectedSpvBloomFilterMap[filterloadMsg.AddrFrom] = filterloadMsg.BloomFilter
 }
 
 func (node *FullNode) handleConnection(conn net.Conn) {
