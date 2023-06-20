@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"crypto/ecdsa"
 	"errors"
 	"log"
 	"time"
@@ -203,36 +202,6 @@ func (blockchain *BlockChain) GetUTXOs(address string) map[string]TxOutputs {
 	utxoSet := blockchain.UTXOSet()
 	unspentTransactionOutputs := utxoSet.FindUTXO(address)
 	return unspentTransactionOutputs
-}
-
-func (blockchain *BlockChain) Transfer(privKey ecdsa.PrivateKey, pubKey []byte, toAddress string, amount int) error {
-	fromAddress := getAddressFromPubkey(pubKey)
-	utxoSet := blockchain.UTXOSet()
-	transferAmount, unspentTxnOutputs := utxoSet.FindSpendableOutput(fromAddress, amount)
-	if transferAmount < amount {
-		return errors.New("not enough balance to transfer")
-	}
-
-	newTxnInputs := []TxInput{}
-	newTxnOutputs := []TxOutput{}
-
-	for txnID, txnOutputs := range unspentTxnOutputs {
-		for _, output := range txnOutputs {
-			newTxnInputs = append(newTxnInputs, createTxnInput([]byte(txnID), output.Index, pubKey))
-		}
-	}
-
-	newTxnOutputs = append(newTxnOutputs, createTxnOutput(amount, toAddress))
-	if transferAmount > amount {
-		newTxnOutputs = append(newTxnOutputs, createTxnOutput(transferAmount-amount, fromAddress))
-	}
-
-	newTransaction := Transaction{[]byte{}, newTxnInputs, newTxnOutputs, getCurrentTimeInMilliSec()}
-	newTransaction.Sign(privKey)
-	newTransaction.SetHash()
-	err := blockchain.AddBlock([]*Transaction{&newTransaction})
-
-	return err
 }
 
 func (blockchain *BlockChain) GetUnmatchedBlocks(targetBlockHash []byte) (bool, [][]byte) {
