@@ -232,12 +232,60 @@ func (node *FullNode) handleInvMsg(msg []byte) {
 	}
 }
 
+func (node *FullNode) verifyTransaction(newTransaction *blockchain.Transaction) bool {
+	if blockchain.IsCoinbaseTransaction(newTransaction) {
+		return true
+	}
+	txnMap := node.Blockchain.GetTransactionMapFromInputs(newTransaction)
+	for _, txnInput := range newTransaction.Inputs {
+		signature := txnInput.ScriptSig.Signature
+		pubkey := txnInput.ScriptSig.PubKey
+		referencedUTXO := txnMap[string(txnInput.TxID)].Outputs[txnInput.VOut]
+
+		if !bytes.Equal(getPubkeyHashFromPubkey(pubkey), referencedUTXO.ScriptPubKey.PubKeyHash) {
+			return false
+		}
+
+		signatureLength := len(signature)
+		r := new(big.Int).SetBytes(signature[:(signatureLength / 2)])
+		s := new(big.Int).SetBytes(signature[(signatureLength / 2):])
+		ecdsaPubkey := getECDSAPubkeyFromUncompressedPubkey(pubkey)
+		if !ecdsa.Verify(&ecdsaPubkey, txnInput.Hash(), r, s) {
+			return false
+		}
+	}
+	return true
+}
+
+func (node *FullNode) verifyBlock(newBlock *blockchain.Block) bool {
+	// Step 1: Check if block header hash is smaller than target hash
+	blockHash := new(big.Int).SetBytes(newBlock.GetHash())
+	if blockHash.Cmp(blockchain.TARGET_HASH) != -1 {
+		return false
+	}
+	// Step 2: Check if the first transaction is Coinbase transaction
+	if !blockchain.IsCoinbaseTransaction(newBlock.Transactions[0]) {
+		return false
+	}
+	// Step 3: Verify the validity of each transaction
+	for _, transaction := range newBlock.Transactions {
+		if !node.verifyTransaction(transaction) {
+			return false
+		}
+	}
+	return true
+}
+
 func (node *FullNode) handleBlockdataMsg(msg []byte) {
 	var blockdataMsg BlockdataMessage
 	genericDeserialize(msg, &blockdataMsg)
 	if blockdataMsg.Index == NEWBLOCK_FROM_MINER_INDEX {
 		newBlock := blockdataMsg.BlockList[0]
 		// Step 1: Verify newly mined block received from miner node
+		if !node.verifyBlock(newBlock) {
+			fmt.Println("new block is invalid")
+			return
+		}
 
 		// Step 2: Store new block to local blockchain
 

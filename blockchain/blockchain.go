@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"errors"
 	"log"
 	"time"
 
@@ -150,7 +149,7 @@ func (blockchain *BlockChain) StoreNewBlock(block *Block) {
 	utxoSet.UpdateWithNewBlock(block)
 }
 
-func (blockchain *BlockChain) getTransactionMapFromInputs(transaction Transaction) map[string]Transaction {
+func (blockchain *BlockChain) GetTransactionMapFromInputs(transaction *Transaction) map[string]Transaction {
 	txnIDs := map[string]bool{}
 	txnMap := map[string]Transaction{}
 
@@ -179,12 +178,6 @@ func (blockchain *BlockChain) getTransactionMapFromInputs(transaction Transactio
 }
 
 func (blockchain *BlockChain) AddBlock(transactions []*Transaction) error {
-	for _, transaction := range transactions {
-		txnMap := blockchain.getTransactionMapFromInputs(*transaction)
-		if !transaction.Verify(txnMap) {
-			return errors.New("invalid transaction")
-		}
-	}
 	coinbaseTransaction := CoinBaseTransaction(WALLET_ADDRESS)
 	newBlock := Block{
 		BlockHeader: BlockHeader{

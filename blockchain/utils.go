@@ -25,6 +25,10 @@ const (
 
 var TARGET_HASH = new(big.Int).Lsh(big.NewInt(1), hashValueLength-difficultyLevel)
 
+func IsCoinbaseTransaction(transaction *Transaction) bool {
+	return len(transaction.Inputs) == 0
+}
+
 func getPubkeyHashFromPubkey(pubkey []byte) []byte {
 	sha256Hash := sha256.Sum256(pubkey)
 	hasher := ripemd160.New()
