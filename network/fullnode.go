@@ -279,7 +279,9 @@ func (node *FullNode) verifyBlock(newBlock *blockchain.Block) bool {
 func (node *FullNode) handleBlockdataMsg(msg []byte) {
 	var blockdataMsg BlockdataMessage
 	genericDeserialize(msg, &blockdataMsg)
-	if blockdataMsg.Index == NEWBLOCK_FROM_MINER_INDEX {
+
+	// Newly mined block
+	if blockdataMsg.Index == NEWBLOCK_FROM_MINER_INDEX && len(blockdataMsg.BlockList) == 1 {
 		newBlock := blockdataMsg.BlockList[0]
 		// Step 1: Verify newly mined block received from miner node
 		if !node.verifyBlock(newBlock) {
@@ -288,8 +290,15 @@ func (node *FullNode) handleBlockdataMsg(msg []byte) {
 		}
 
 		// Step 2: Store new block to local blockchain
+		node.Blockchain.SetBlock(newBlock)
+		node.Blockchain.SetLastHash(newBlock.GetHash())
 
 		// Step 3: Relay new block to other full nodes
+		for _, connectedNode := range node.connectedPeers {
+			if connectedNode.NodeType == FULLNODE {
+				node.sendBlockdataMessage(connectedNode.Address, NEWBLOCK_FROM_MINER_INDEX, blockdataMsg.BlockList)
+			}
+		}
 
 		// Step 4: Filter transactions of interest of connected SPV nodes using Bloom filter and send merkleblock message
 		for _, transaction := range newBlock.Transactions {
