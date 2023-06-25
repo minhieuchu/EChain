@@ -2,6 +2,7 @@ package network
 
 import (
 	"EChain/blockchain"
+	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -138,6 +139,21 @@ func (node *SPVNode) handleMerkleblockMsg(msg []byte) {
 		}
 	}
 	// Step 2: Verify transaction with Merkle proof
+	if !node.blockchainHeader.CheckHeaderExistence(&blockHeader) {
+		return
+	}
+	calculatedMerkleRoot := getDoubleSHA256(serialize(merkleblockMsg.Transaction))
+	for _, merkleProofNode := range merkleblockMsg.MerklePath {
+		if merkleProofNode.IsLeftNode {
+			calculatedMerkleRoot = getDoubleSHA256(append(merkleProofNode.Hash, calculatedMerkleRoot...))
+		} else {
+			calculatedMerkleRoot = getDoubleSHA256(append(calculatedMerkleRoot, merkleProofNode.Hash...))
+		}
+	}
+	if !bytes.Equal(calculatedMerkleRoot, blockHeader.MerkleRoot) {
+		fmt.Println("transaction does not belong in block")
+		return
+	}
 
 	// Step 3: Update local UTXO set with new transaction
 

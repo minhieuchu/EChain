@@ -308,7 +308,7 @@ func (node *FullNode) handleBlockdataMsg(msg []byte) {
 					if isTransactionOfInterest(*transaction, bloomFilter) {
 						merkleblockMsg := MerkleBlockMessage{
 							BlockHeader: newBlock.BlockHeader,
-							MerklePath:  newBlock.GetMerklePath(transaction),
+							MerklePath:  newBlock.GetMerkleProof(transaction),
 							Transaction: *transaction,
 							AddrFrom:    node.NetworkAddress,
 						}

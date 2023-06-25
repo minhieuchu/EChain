@@ -2,6 +2,11 @@ package blockchain
 
 import "bytes"
 
+type MerkleProofNode struct {
+	Hash       []byte
+	IsLeftNode bool
+}
+
 func (block *Block) SetMerkleRoot() {
 	currentHashList := [][]byte{}
 	nextHashList := [][]byte{}
@@ -16,7 +21,7 @@ func (block *Block) SetMerkleRoot() {
 			break
 		}
 		for i := 0; i < len(currentHashList); i += 2 {
-			if i == len(currentHashList) - 1 {
+			if i == len(currentHashList)-1 {
 				nextHashList = append(nextHashList, getDoubleSHA256(append(currentHashList[i], currentHashList[i]...)))
 			} else {
 				nextHashList = append(nextHashList, getDoubleSHA256(append(currentHashList[i], currentHashList[i+1]...)))
@@ -26,11 +31,11 @@ func (block *Block) SetMerkleRoot() {
 	}
 }
 
-func (block *Block) GetMerklePath(targetTransaction *Transaction) [][]byte {
+func (block *Block) GetMerkleProof(targetTransaction *Transaction) []MerkleProofNode {
 	currentHashList := [][]byte{}
 	nextHashList := [][]byte{}
 	targetHash := getDoubleSHA256(serialize(targetTransaction))
-	merklePath := [][]byte{}
+	merkleProof := []MerkleProofNode{}
 
 	for _, transaction := range block.Transactions {
 		currentHashList = append(currentHashList, getDoubleSHA256(serialize(transaction)))
@@ -41,21 +46,21 @@ func (block *Block) GetMerklePath(targetTransaction *Transaction) [][]byte {
 			break
 		}
 		for i := 0; i < len(currentHashList); i += 2 {
-			if i == len(currentHashList) - 1 {
+			if i == len(currentHashList)-1 {
 				nextHash := getDoubleSHA256(append(currentHashList[i], currentHashList[i]...))
 				nextHashList = append(nextHashList, nextHash)
 				if bytes.Equal(targetHash, currentHashList[i]) {
-					merklePath = append(merklePath, currentHashList[i])
+					merkleProof = append(merkleProof, MerkleProofNode{currentHashList[i], true})
 					targetHash = nextHash
 				}
 			} else {
 				nextHash := getDoubleSHA256(append(currentHashList[i], currentHashList[i+1]...))
 				nextHashList = append(nextHashList, nextHash)
 				if bytes.Equal(targetHash, currentHashList[i]) {
-					merklePath = append(merklePath, currentHashList[i+1])
+					merkleProof = append(merkleProof, MerkleProofNode{currentHashList[i+1], false})
 					targetHash = nextHash
 				} else if bytes.Equal(targetHash, currentHashList[i+1]) {
-					merklePath = append(merklePath, currentHashList[i])
+					merkleProof = append(merkleProof, MerkleProofNode{currentHashList[i], true})
 					targetHash = nextHash
 				}
 			}
@@ -63,5 +68,5 @@ func (block *Block) GetMerklePath(targetTransaction *Transaction) [][]byte {
 		currentHashList = nextHashList
 	}
 
-	return merklePath
+	return merkleProof
 }

@@ -68,7 +68,7 @@ type MerkleBlockMessage struct {
 	// Merkeblock message also contains transaction data for simplicity,
 	// instead of sending a separate txn message after merkleblock message
 	BlockHeader blockchain.BlockHeader
-	MerklePath  [][]byte
+	MerklePath  []blockchain.MerkleProofNode
 	Transaction blockchain.Transaction
 	AddrFrom    string
 }

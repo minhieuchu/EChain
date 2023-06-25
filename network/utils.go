@@ -94,6 +94,12 @@ func isTransactionOfInterest(transaction blockchain.Transaction, bloomFilter []s
 	return false
 }
 
+func getDoubleSHA256(data []byte) []byte {
+	firstHash := sha256.Sum256(data)
+	secondHash := sha256.Sum256(firstHash[:])
+	return secondHash[:]
+}
+
 func genericDeserialize[T any](data []byte, target *T) {
 	byteBuffer := bytes.NewBuffer(data)
 	decoder := gob.NewDecoder(byteBuffer)
