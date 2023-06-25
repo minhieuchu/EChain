@@ -310,6 +310,7 @@ func (node *FullNode) handleBlockdataMsg(msg []byte) {
 							BlockHeader: newBlock.BlockHeader,
 							MerklePath:  newBlock.GetMerklePath(transaction),
 							Transaction: *transaction,
+							AddrFrom:    node.NetworkAddress,
 						}
 						node.sendMerkleblockMessage(connectedNode.Address, &merkleblockMsg)
 					}

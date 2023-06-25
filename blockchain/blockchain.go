@@ -58,10 +58,6 @@ func (chainIterator *BlockChainIterator) CurrentBlock() *Block {
 	return DeserializeBlock(encodedBlock)
 }
 
-func (blockchainHeader *BlockChainHeader) UTXOSet() UTXOSet {
-	return UTXOSet{blockchainHeader.DataBase}
-}
-
 func (blockchainHeader *BlockChainHeader) GetHeight() int {
 	currentHash := blockchainHeader.LastHash
 	height := 0
@@ -111,6 +107,16 @@ func (blockchainHeader *BlockChainHeader) GetUnmatchedHeaders(targetHeaderHash [
 	}
 
 	return headerExisted, unmatchedHeaders
+}
+
+func (blockchainHeader *BlockChainHeader) CheckHeaderExistence(header *BlockHeader) bool {
+	headerHash, err := blockchainHeader.DataBase.Get(header.GetHash(), nil)
+	var blockHeader BlockHeader
+	genericDeserialize(headerHash, &blockHeader)
+	if err != nil || blockHeader.Timestamp == "" {
+		return false
+	}
+	return true
 }
 
 func (blockchain *BlockChain) GetHeight() int {

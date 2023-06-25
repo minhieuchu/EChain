@@ -27,6 +27,10 @@ var (
 	utxoPrefixLength = len(utxoPrefix)
 )
 
+func NewUTXOSet(database *leveldb.DB) UTXOSet {
+	return UTXOSet{database}
+}
+
 func (utxoSet *UTXOSet) FindSpendableOutput(address string, amount int) (int, map[string]TxOutputs) {
 	accumulatedAmount := 0
 	utxoMap := make(map[string]TxOutputs)

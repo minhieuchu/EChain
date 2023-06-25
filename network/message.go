@@ -70,4 +70,5 @@ type MerkleBlockMessage struct {
 	BlockHeader blockchain.BlockHeader
 	MerklePath  [][]byte
 	Transaction blockchain.Transaction
+	AddrFrom    string
 }
