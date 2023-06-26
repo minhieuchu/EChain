@@ -156,6 +156,16 @@ func (node *SPVNode) handleMerkleblockMsg(msg []byte) {
 	}
 
 	// Step 3: Update local UTXO set with new transaction
+	newTxInputs := []blockchain.TxInput{}
+	updatedTransaction := merkleblockMsg.Transaction
+
+	for _, input := range merkleblockMsg.Transaction.Inputs {
+		if node.isTxnInputOfInterest(&input) {
+			newTxInputs = append(newTxInputs, input)
+		}
+	}
+	updatedTransaction.Inputs = newTxInputs
+	node.utxoSet.UpdateWithNewTransaction(&updatedTransaction)
 
 	// Step 4: Relay merkleblock message to other SPV nodes
 }
