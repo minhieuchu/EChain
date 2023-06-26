@@ -85,6 +85,12 @@ func (node *SPVNode) sendFilterloadMsg(toAddress string) {
 	sendMessage(toAddress, sentData)
 }
 
+func (node *SPVNode) sendMerkleblockMessage(toAddress string, merkleblockMsg *MerkleBlockMessage) {
+	fmt.Println("Send Merkleblock msg from", node.NetworkAddress, "to", toAddress)
+	sentData := append(msgTypeToBytes(MERKLEBLOCK_MSG), serialize(merkleblockMsg)...)
+	sendMessage(toAddress, sentData)
+}
+
 func (node *SPVNode) isTxnInputOfInterest(txnInput *blockchain.TxInput) bool {
 	for _, targetAddr := range node.monitorAddrList {
 		if txnInput.IsSignedBy(targetAddr) {
@@ -168,6 +174,13 @@ func (node *SPVNode) handleMerkleblockMsg(msg []byte) {
 	node.utxoSet.UpdateWithNewTransaction(&updatedTransaction)
 
 	// Step 4: Relay merkleblock message to other SPV nodes
+	for _, connectedNode := range node.connectedPeers {
+		if connectedNode.NodeType == SPV {
+			go func(targetAddress string) {
+				node.sendMerkleblockMessage(targetAddress, &merkleblockMsg)
+			}(connectedNode.Address)
+		}
+	}
 }
 
 func (node *SPVNode) handleNewAddrMsg(msg []byte) {
