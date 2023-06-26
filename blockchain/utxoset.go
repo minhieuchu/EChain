@@ -27,6 +27,10 @@ var (
 	utxoPrefixLength = len(utxoPrefix)
 )
 
+func NewUTXOSet(database *leveldb.DB) UTXOSet {
+	return UTXOSet{database}
+}
+
 func (utxoSet *UTXOSet) FindSpendableOutput(address string, amount int) (int, map[string]TxOutputs) {
 	accumulatedAmount := 0
 	utxoMap := make(map[string]TxOutputs)
@@ -71,23 +75,21 @@ func (utxoSet *UTXOSet) FindUTXO(address string) map[string]TxOutputs {
 	return utxoMap
 }
 
-func (utxoSet *UTXOSet) Update(newBlock *Block) {
+func (utxoSet *UTXOSet) UpdateWithNewTransaction(newTransaction *Transaction) {
 	spentTxnOutputs := make(map[string][]int)
 	batch := new(leveldb.Batch)
 
-	for _, transaction := range newBlock.Transactions {
-		var txOutputs TxOutputs
-		for _, txnInput := range transaction.Inputs {
-			spentTxnOutputs[string(txnInput.TxID)] = append(spentTxnOutputs[string(txnInput.TxID)], txnInput.VOut)
-		}
-
-		for outputIndex, txOutput := range transaction.Outputs {
-			txOutputs = append(txOutputs, TxOutputWithIndex{txOutput, outputIndex})
-		}
-
-		utxoSetTxnID := append(utxoPrefix, transaction.Hash...)
-		batch.Put(utxoSetTxnID, serialize(txOutputs))
+	var txOutputs TxOutputs
+	for _, txnInput := range newTransaction.Inputs {
+		spentTxnOutputs[string(txnInput.TxID)] = append(spentTxnOutputs[string(txnInput.TxID)], txnInput.VOut)
 	}
+
+	for outputIndex, txOutput := range newTransaction.Outputs {
+		txOutputs = append(txOutputs, TxOutputWithIndex{txOutput, outputIndex})
+	}
+
+	utxoSetTxnID := append(utxoPrefix, newTransaction.Hash...)
+	batch.Put(utxoSetTxnID, serialize(txOutputs))
 
 	for txnID, spentTxnOutputIDs := range spentTxnOutputs {
 		utxoSetTxnID := append(utxoPrefix, []byte(txnID)...)
@@ -108,6 +110,12 @@ func (utxoSet *UTXOSet) Update(newBlock *Block) {
 		}
 	}
 	utxoSet.database.Write(batch, nil)
+}
+
+func (utxoSet *UTXOSet) UpdateWithNewBlock(newBlock *Block) {
+	for _, transaction := range newBlock.Transactions {
+		utxoSet.UpdateWithNewTransaction(transaction)
+	}
 }
 
 func (utxoSet *UTXOSet) GetTxOutputFromTxInput(txnInput *TxInput) *TxOutput {

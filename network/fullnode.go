@@ -15,10 +15,13 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+const NEWBLOCK_FROM_MINER_INDEX = -1
+
 type FullNode struct {
 	P2PNode
-	Blockchain          *blockchain.BlockChain
-	getdataMessageCount int
+	Blockchain                 *blockchain.BlockChain
+	connectedSpvBloomFilterMap map[string][]string
+	getdataMessageCount        int
 }
 
 func NewFullNode(networkAddress, walletAddress string) *FullNode {
@@ -44,7 +47,7 @@ func (node *FullNode) sendAddrMsg(toAddress string) {
 
 func (node *FullNode) sendVerackMsg(toAddress string) {
 	fmt.Println("Send Verack msg from", node.NetworkAddress, "to", toAddress)
-	verackMsg := VerackMessage{node.NetworkAddress}
+	verackMsg := VerackMessage{FULLNODE, node.NetworkAddress}
 	sentData := append(msgTypeToBytes(VERACK_MSG), serialize(verackMsg)...)
 	sendMessage(toAddress, sentData)
 }
@@ -118,6 +121,12 @@ func (node *FullNode) sendHeaderMessage(toAddress string, headerMsg *HeaderMessa
 func (node *FullNode) sendNewTxnMessage(toAddress string, newTxnMsg *NewTxnMessage) {
 	fmt.Println("Send NewTxn msg from", node.NetworkAddress, "to", toAddress)
 	sentData := append(msgTypeToBytes(NEWTXN_MSG), serialize(newTxnMsg)...)
+	sendMessage(toAddress, sentData)
+}
+
+func (node *FullNode) sendMerkleblockMessage(toAddress string, merkleblockMsg *MerkleBlockMessage) {
+	fmt.Println("Send Merkleblock msg from", node.NetworkAddress, "to", toAddress)
+	sentData := append(msgTypeToBytes(MERKLEBLOCK_MSG), serialize(merkleblockMsg)...)
 	sendMessage(toAddress, sentData)
 }
 
@@ -195,8 +204,8 @@ func (node *FullNode) handleInvMsg(msg []byte) {
 	node.getdataMessageCount = messageCount
 	wg.Add(messageCount)
 
-	for peerIndex, peerAddr := range node.connectedPeers {
-		if peerIndex >= messageCount {
+	for index, connectedNode := range node.connectedPeers {
+		if index >= messageCount {
 			break
 		}
 		go func(toAddress string) {
@@ -212,20 +221,104 @@ func (node *FullNode) handleInvMsg(msg []byte) {
 				node.sendGetdataMessage(toAddress, &getdataMsg)
 				wg.Done()
 			}
-		}(peerAddr)
+		}(connectedNode.Address)
 	}
 	wg.Wait()
 	time.Sleep(3 * time.Second) // Wait for all blockdata messages to be processed
 	utxoSet := node.Blockchain.UTXOSet()
 	utxoSet.ReIndex()
-	for _, peerAddr := range node.connectedPeers {
-		node.sendGetBlocksMsg(peerAddr)
+	for _, connectedNode := range node.connectedPeers {
+		node.sendGetBlocksMsg(connectedNode.Address)
 	}
+}
+
+func (node *FullNode) verifyTransaction(newTransaction *blockchain.Transaction) bool {
+	if blockchain.IsCoinbaseTransaction(newTransaction) {
+		return true
+	}
+	txnMap := node.Blockchain.GetTransactionMapFromInputs(newTransaction)
+	for _, txnInput := range newTransaction.Inputs {
+		signature := txnInput.ScriptSig.Signature
+		pubkey := txnInput.ScriptSig.PubKey
+		referencedUTXO := txnMap[string(txnInput.TxID)].Outputs[txnInput.VOut]
+
+		if !bytes.Equal(getPubkeyHashFromPubkey(pubkey), referencedUTXO.ScriptPubKey.PubKeyHash) {
+			return false
+		}
+
+		signatureLength := len(signature)
+		r := new(big.Int).SetBytes(signature[:(signatureLength / 2)])
+		s := new(big.Int).SetBytes(signature[(signatureLength / 2):])
+		ecdsaPubkey := getECDSAPubkeyFromUncompressedPubkey(pubkey)
+		if !ecdsa.Verify(&ecdsaPubkey, txnInput.Hash(), r, s) {
+			return false
+		}
+	}
+	return true
+}
+
+func (node *FullNode) verifyBlock(newBlock *blockchain.Block) bool {
+	// Step 1: Check if block header hash is smaller than target hash
+	blockHash := new(big.Int).SetBytes(newBlock.GetHash())
+	if blockHash.Cmp(blockchain.TARGET_HASH) != -1 {
+		return false
+	}
+	// Step 2: Check if the first transaction is Coinbase transaction
+	if !blockchain.IsCoinbaseTransaction(newBlock.Transactions[0]) {
+		return false
+	}
+	// Step 3: Verify the validity of each transaction
+	for _, transaction := range newBlock.Transactions {
+		if !node.verifyTransaction(transaction) {
+			return false
+		}
+	}
+	return true
 }
 
 func (node *FullNode) handleBlockdataMsg(msg []byte) {
 	var blockdataMsg BlockdataMessage
 	genericDeserialize(msg, &blockdataMsg)
+
+	// Newly mined block
+	if blockdataMsg.Index == NEWBLOCK_FROM_MINER_INDEX && len(blockdataMsg.BlockList) == 1 {
+		newBlock := blockdataMsg.BlockList[0]
+		// Step 1: Verify newly mined block received from miner node
+		if !node.verifyBlock(newBlock) {
+			fmt.Println("new block is invalid")
+			return
+		}
+
+		// Step 2: Store new block to local blockchain
+		node.Blockchain.SetBlock(newBlock)
+		node.Blockchain.SetLastHash(newBlock.GetHash())
+
+		// Step 3: Relay new block to other full nodes
+		for _, connectedNode := range node.connectedPeers {
+			if connectedNode.NodeType == FULLNODE {
+				node.sendBlockdataMessage(connectedNode.Address, NEWBLOCK_FROM_MINER_INDEX, blockdataMsg.BlockList)
+			}
+		}
+
+		// Step 4: Filter transactions of interest of connected SPV nodes using Bloom filter and send merkleblock message
+		for _, transaction := range newBlock.Transactions {
+			for _, connectedNode := range node.connectedPeers {
+				if connectedNode.NodeType == SPV {
+					bloomFilter := node.connectedSpvBloomFilterMap[connectedNode.Address]
+					if isTransactionOfInterest(*transaction, bloomFilter) {
+						merkleblockMsg := MerkleBlockMessage{
+							BlockHeader: newBlock.BlockHeader,
+							MerklePath:  newBlock.GetMerkleProof(transaction),
+							Transaction: *transaction,
+							AddrFrom:    node.NetworkAddress,
+						}
+						node.sendMerkleblockMessage(connectedNode.Address, &merkleblockMsg)
+					}
+				}
+			}
+		}
+		return
+	}
 	for _, block := range blockdataMsg.BlockList {
 		node.Blockchain.SetBlock(block)
 	}
@@ -240,7 +333,7 @@ func (node *FullNode) handleVersionMsg(msg []byte) {
 
 	if node.Version == versionMsg.Version {
 		node.sendVerackMsg(versionMsg.AddrMe)
-		if !slices.Contains(node.connectedPeers, versionMsg.AddrMe) {
+		if !slices.Contains(node.getConnectedNodeAddresses(), versionMsg.AddrMe) {
 			node.sendVersionMsg(versionMsg.AddrMe)
 		}
 	}
@@ -250,10 +343,10 @@ func (node *FullNode) handleVerackMsg(msg []byte) {
 	var verackMsg VerackMessage
 	genericDeserialize(msg, &verackMsg)
 
-	if slices.Contains(node.connectedPeers, verackMsg.AddrFrom) {
+	if slices.Contains(node.getConnectedNodeAddresses(), verackMsg.AddrFrom) {
 		return
 	}
-	node.connectedPeers = append(node.connectedPeers, verackMsg.AddrFrom)
+	node.connectedPeers = append(node.connectedPeers, NodeInfo{verackMsg.NodeType, verackMsg.AddrFrom})
 	node.sendAddrMsg(verackMsg.AddrFrom)
 	node.sendGetBlocksMsg(verackMsg.AddrFrom)
 }
@@ -262,16 +355,16 @@ func (node *FullNode) handleAddrMsg(msg []byte) {
 	var addrMsg AddrMessage
 	genericDeserialize(msg, &addrMsg)
 
-	if !slices.Contains(node.connectedPeers, addrMsg.Address) {
+	if !slices.Contains(node.getConnectedNodeAddresses(), addrMsg.Address) {
 		node.sendVersionMsg(addrMsg.Address)
 	}
 
 	if !slices.Contains(node.forwardedAddrList, addrMsg.Address) {
 		node.forwardedAddrList = append(node.forwardedAddrList, addrMsg.Address)
-		for _, peerAddr := range node.connectedPeers {
-			if peerAddr != addrMsg.Address {
+		for _, connectedNode := range node.connectedPeers {
+			if connectedNode.Address != addrMsg.Address {
 				sentData := append(msgTypeToBytes(ADDR_MSG), msg...)
-				sendMessage(peerAddr, sentData)
+				sendMessage(connectedNode.Address, sentData)
 			}
 		}
 	}
@@ -291,7 +384,7 @@ func (node *FullNode) handleNewTxnMsg(msg []byte) {
 	totalInputAmount := 0
 	var newTransaction blockchain.Transaction
 	genericDeserialize(msg, &newTransaction)
-	
+
 	// Step 1: Check if transaction inputs reference valid UTXOs &
 	// check if input signature works with output's locking script
 	for _, txnInput := range newTransaction.Inputs {
@@ -332,9 +425,17 @@ func (node *FullNode) handleNewTxnMsg(msg []byte) {
 
 	// Step 3: Replay transaction to network
 	// Todo: Add to current node's mempool
-	for _, nodeAddr := range node.connectedPeers {
-		node.sendNewTxnMessage(nodeAddr, &NewTxnMessage{newTransaction})
+	for _, connectedNode := range node.connectedPeers {
+		if connectedNode.NodeType == FULLNODE || connectedNode.NodeType == MINER {
+			node.sendNewTxnMessage(connectedNode.Address, &NewTxnMessage{newTransaction})
+		}
 	}
+}
+
+func (node *FullNode) handleFilterloadMsg(msg []byte) {
+	var filterloadMsg FilterloadMessage
+	genericDeserialize(msg, &filterloadMsg)
+	node.connectedSpvBloomFilterMap[filterloadMsg.AddrFrom] = filterloadMsg.BloomFilter
 }
 
 func (node *FullNode) handleConnection(conn net.Conn) {
@@ -365,6 +466,8 @@ func (node *FullNode) handleConnection(conn net.Conn) {
 		node.handeGetUTXOMsg(conn, payload)
 	case NEWTXN_MSG:
 		node.handleNewTxnMsg(payload)
+	case FILTERLOAD_MSG:
+		node.handleFilterloadMsg(payload)
 	default:
 		fmt.Println("invalid message")
 	}

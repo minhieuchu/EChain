@@ -1,6 +1,7 @@
 package network
 
 import (
+	"EChain/blockchain"
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -75,6 +76,28 @@ func serialize(value interface{}) []byte {
 	encoder := gob.NewEncoder(&byteBuffer)
 	encoder.Encode(value)
 	return byteBuffer.Bytes()
+}
+
+func isTransactionOfInterest(transaction blockchain.Transaction, bloomFilter []string) bool {
+	for _, targetAddr := range bloomFilter {
+		for _, input := range transaction.Inputs {
+			if input.IsSignedBy(targetAddr) {
+				return true
+			}
+		}
+		for _, output := range transaction.Outputs {
+			if output.IsBoundTo(targetAddr) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func getDoubleSHA256(data []byte) []byte {
+	firstHash := sha256.Sum256(data)
+	secondHash := sha256.Sum256(firstHash[:])
+	return secondHash[:]
 }
 
 func genericDeserialize[T any](data []byte, target *T) {

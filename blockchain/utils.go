@@ -25,6 +25,10 @@ const (
 
 var TARGET_HASH = new(big.Int).Lsh(big.NewInt(1), hashValueLength-difficultyLevel)
 
+func IsCoinbaseTransaction(transaction *Transaction) bool {
+	return len(transaction.Inputs) == 0
+}
+
 func getPubkeyHashFromPubkey(pubkey []byte) []byte {
 	sha256Hash := sha256.Sum256(pubkey)
 	hasher := ripemd160.New()
@@ -82,6 +86,12 @@ func genericDeserialize[T any](data []byte, target *T) {
 	byteBuffer := bytes.NewBuffer(data)
 	decoder := gob.NewDecoder(byteBuffer)
 	decoder.Decode(target)
+}
+
+func getDoubleSHA256(data []byte) []byte {
+	firstHash := sha256.Sum256(data)
+	secondHash := sha256.Sum256(firstHash[:])
+	return secondHash[:]
 }
 
 func handleErr(err error) {

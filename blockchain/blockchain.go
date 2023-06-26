@@ -1,9 +1,6 @@
 package blockchain
 
 import (
-	"crypto/ecdsa"
-	"errors"
-	"fmt"
 	"log"
 	"time"
 
@@ -45,14 +42,9 @@ func InitBlockChain(networkAddress, walletAddress string) *BlockChain {
 	return &blockchain
 }
 
-func InitBlockChainHeader(networkAddress string) *BlockChainHeader {
-	db, err := leveldb.OpenFile("storage/"+networkAddress, nil)
-	if err != nil {
-		fmt.Println("can not start database at", networkAddress)
-		return nil
-	}
+func InitBlockChainHeader(database *leveldb.DB) *BlockChainHeader {
 	blockchainHeader := BlockChainHeader{
-		DataBase: db,
+		DataBase: database,
 	}
 	genesisBlock := GenerateGenesisBlock()
 	blockchainHeader.LastHash = genesisBlock.GetHash()
@@ -117,6 +109,16 @@ func (blockchainHeader *BlockChainHeader) GetUnmatchedHeaders(targetHeaderHash [
 	return headerExisted, unmatchedHeaders
 }
 
+func (blockchainHeader *BlockChainHeader) CheckHeaderExistence(header *BlockHeader) bool {
+	headerHash, err := blockchainHeader.DataBase.Get(header.GetHash(), nil)
+	var blockHeader BlockHeader
+	genericDeserialize(headerHash, &blockHeader)
+	if err != nil || blockHeader.Timestamp == "" {
+		return false
+	}
+	return true
+}
+
 func (blockchain *BlockChain) GetHeight() int {
 	chainIterator := BlockChainIterator{blockchain.DataBase, blockchain.LastHash}
 	blockHeight := 0
@@ -150,10 +152,10 @@ func (blockchain *BlockChain) StoreNewBlock(block *Block) {
 	blockchain.DataBase.Put([]byte(LAST_HASH_STOGAGE_KEY), blockchain.LastHash, nil)
 
 	utxoSet := blockchain.UTXOSet()
-	utxoSet.Update(block)
+	utxoSet.UpdateWithNewBlock(block)
 }
 
-func (blockchain *BlockChain) getTransactionMapFromInputs(transaction Transaction) map[string]Transaction {
+func (blockchain *BlockChain) GetTransactionMapFromInputs(transaction *Transaction) map[string]Transaction {
 	txnIDs := map[string]bool{}
 	txnMap := map[string]Transaction{}
 
@@ -182,12 +184,6 @@ func (blockchain *BlockChain) getTransactionMapFromInputs(transaction Transactio
 }
 
 func (blockchain *BlockChain) AddBlock(transactions []*Transaction) error {
-	for _, transaction := range transactions {
-		txnMap := blockchain.getTransactionMapFromInputs(*transaction)
-		if !transaction.Verify(txnMap) {
-			return errors.New("invalid transaction")
-		}
-	}
 	coinbaseTransaction := CoinBaseTransaction(WALLET_ADDRESS)
 	newBlock := Block{
 		BlockHeader: BlockHeader{
@@ -205,36 +201,6 @@ func (blockchain *BlockChain) GetUTXOs(address string) map[string]TxOutputs {
 	utxoSet := blockchain.UTXOSet()
 	unspentTransactionOutputs := utxoSet.FindUTXO(address)
 	return unspentTransactionOutputs
-}
-
-func (blockchain *BlockChain) Transfer(privKey ecdsa.PrivateKey, pubKey []byte, toAddress string, amount int) error {
-	fromAddress := getAddressFromPubkey(pubKey)
-	utxoSet := blockchain.UTXOSet()
-	transferAmount, unspentTxnOutputs := utxoSet.FindSpendableOutput(fromAddress, amount)
-	if transferAmount < amount {
-		return errors.New("not enough balance to transfer")
-	}
-
-	newTxnInputs := []TxInput{}
-	newTxnOutputs := []TxOutput{}
-
-	for txnID, txnOutputs := range unspentTxnOutputs {
-		for _, output := range txnOutputs {
-			newTxnInputs = append(newTxnInputs, createTxnInput([]byte(txnID), output.Index, pubKey))
-		}
-	}
-
-	newTxnOutputs = append(newTxnOutputs, createTxnOutput(amount, toAddress))
-	if transferAmount > amount {
-		newTxnOutputs = append(newTxnOutputs, createTxnOutput(transferAmount-amount, fromAddress))
-	}
-
-	newTransaction := Transaction{[]byte{}, newTxnInputs, newTxnOutputs, getCurrentTimeInMilliSec()}
-	newTransaction.Sign(privKey)
-	newTransaction.SetHash()
-	err := blockchain.AddBlock([]*Transaction{&newTransaction})
-
-	return err
 }
 
 func (blockchain *BlockChain) GetUnmatchedBlocks(targetBlockHash []byte) (bool, [][]byte) {
