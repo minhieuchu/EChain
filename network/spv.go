@@ -275,6 +275,15 @@ func (node *SPVNode) handleAddrMsg(msg []byte) {
 	}
 }
 
+func (node *SPVNode) handeGetUTXOMsg(conn net.Conn, msg []byte) {
+	var getUTXOMsg GetUTXOMessage
+	genericDeserialize(msg, &getUTXOMsg)
+
+	utxoMap := node.utxoSet.FindUTXO(getUTXOMsg.TargetAddress)
+	conn.Write(serialize(utxoMap))
+	conn.Close()
+}
+
 func (node *SPVNode) updateBloomFilter() {
 	// Todo: Implement a realistic bloom filter
 	node.bloomFilter = node.monitorAddrList
@@ -306,6 +315,8 @@ func (node *SPVNode) handleConnection(conn net.Conn) {
 		node.handleNewAddrMsg(payload)
 	case MERKLEBLOCK_MSG:
 		node.handleMerkleblockMsg(payload)
+	case GETUTXO_MSG:
+		node.handeGetUTXOMsg(conn, payload)
 	default:
 		fmt.Println("invalid message")
 	}

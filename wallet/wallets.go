@@ -163,24 +163,26 @@ func (wallets *Wallets) getUTXOs(walletAddress string) (map[string]blockchain.Tx
 	resultChan := make(chan map[string]blockchain.TxOutputs, len(wallets.connectedNodes))
 
 	for _, connectedNode := range wallets.connectedNodes {
-		go func(targetAddress string) {
-			conn, err := net.DialTimeout(protocol, targetAddress, time.Second)
-			if err != nil {
-				return
-			}
-			conn.Write(sentData)
-			conn.(*net.TCPConn).CloseWrite()
+		if connectedNode.NodeType == network.SPV {
+			go func(targetAddress string) {
+				conn, err := net.DialTimeout(protocol, targetAddress, time.Second)
+				if err != nil {
+					return
+				}
+				conn.Write(sentData)
+				conn.(*net.TCPConn).CloseWrite()
 
-			resp, er := io.ReadAll(conn)
-			if er != nil {
-				return
-			}
-			defer conn.Close()
-			var utxoMap map[string]blockchain.TxOutputs
-			genericDeserialize(resp, &utxoMap)
-			successFlag <- true
-			resultChan <- utxoMap
-		}(connectedNode.Address)
+				resp, er := io.ReadAll(conn)
+				if er != nil {
+					return
+				}
+				defer conn.Close()
+				var utxoMap map[string]blockchain.TxOutputs
+				genericDeserialize(resp, &utxoMap)
+				successFlag <- true
+				resultChan <- utxoMap
+			}(connectedNode.Address)
+		}
 	}
 
 	var utxoMap map[string]blockchain.TxOutputs
