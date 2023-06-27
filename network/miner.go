@@ -17,7 +17,7 @@ type MinerNode struct {
 }
 
 func NewMinerNode(networkAddress, walletAddress string) *MinerNode {
-	fullNode := NewFullNode(networkAddress, walletAddress)
+	fullNode := NewFullNode(networkAddress)
 	return &MinerNode{
 		FullNode:         *fullNode,
 		recipientAddress: walletAddress,

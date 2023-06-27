@@ -15,7 +15,7 @@ func main() {
 	nodeType := os.Args[2]
 
 	if nodeType == network.FULLNODE {
-		fullNode := network.NewFullNode(networkAddress, "15Hgpfs67bXWcFPHxF4mCjSbtXXMwbttge")
+		fullNode := network.NewFullNode(networkAddress)
 		fullNode.StartP2PNode()
 	} else if nodeType == network.MINER {
 		minerNode := network.NewMinerNode(networkAddress, "15Hgpfs67bXWcFPHxF4mCjSbtXXMwbttge")

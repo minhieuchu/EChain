@@ -24,8 +24,8 @@ type FullNode struct {
 	getdataMessageCount        int
 }
 
-func NewFullNode(networkAddress, walletAddress string) *FullNode {
-	localBlockchain := blockchain.InitBlockChain(networkAddress, walletAddress)
+func NewFullNode(networkAddress string) *FullNode {
+	localBlockchain := blockchain.InitBlockChain(networkAddress)
 	p2pNode := P2PNode{
 		Version:        1,
 		NetworkAddress: networkAddress,
