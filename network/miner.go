@@ -69,7 +69,27 @@ func (node *MinerNode) handleConnection(conn net.Conn) {
 	payload := data[msgTypeLength:]
 
 	switch msgType {
+	case VERSION_MSG:
+		node.FullNode.handleVersionMsg(payload)
+	case VERACK_MSG:
+		node.FullNode.handleVerackMsg(payload)
+	case ADDR_MSG:
+		node.FullNode.handleAddrMsg(payload)
+	case GETBLOCKS_MSG:
+		node.FullNode.handleGetblocksMsg(payload)
+	case INV_MSG:
+		node.FullNode.handleInvMsg(payload)
+	case GETDATA_MSG:
+		node.FullNode.handleGetdataMsg(payload)
+	case BLOCKDATA_MSG:
+		node.FullNode.handleBlockdataMsg(payload)
+	case GETHEADERS_MSG:
+		node.FullNode.handleGetheadersMsg(payload)
+	case GETUTXO_MSG:
+		node.FullNode.handeGetUTXOMsg(conn, payload)
 	case NEWTXN_MSG:
 		node.handleNewTxnMsg(payload)
+	default:
+		fmt.Println("invalid message")
 	}
 }
