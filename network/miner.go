@@ -55,6 +55,14 @@ func (node *MinerNode) StartP2PNode() {
 	}
 }
 
+func (node *MinerNode) storeNewBlock(newBlock *blockchain.Block) {
+	node.Blockchain.SetBlock(newBlock)
+	node.Blockchain.SetLastHash(newBlock.GetHash())
+
+	utxoSet := node.Blockchain.UTXOSet()
+	utxoSet.UpdateWithNewBlock(newBlock)
+}
+
 func (node *MinerNode) mineBlock(newBlock *blockchain.Block) {
 	nonce := 1
 	for {
@@ -85,9 +93,8 @@ func (node *MinerNode) startMining() {
 		}
 		node.mineBlock(&newBlock)
 
-		// Step 1: Update local blockchain
-		node.Blockchain.SetBlock(&newBlock)
-		node.Blockchain.SetLastHash(newBlock.GetHash())
+		// Step 1: Update local blockchain & UTXO set
+		node.storeNewBlock(&newBlock)
 
 		// Step 2: Relay new block to other full nodes / miner nodes
 		for _, connectedNode := range node.connectedPeers {

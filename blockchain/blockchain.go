@@ -2,7 +2,6 @@ package blockchain
 
 import (
 	"log"
-	"time"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"golang.org/x/exp/slices"
@@ -181,20 +180,6 @@ func (blockchain *BlockChain) GetTransactionMapFromInputs(transaction *Transacti
 	}
 
 	return txnMap
-}
-
-func (blockchain *BlockChain) AddBlock(transactions []*Transaction) error {
-	coinbaseTransaction := CoinBaseTransaction(WALLET_ADDRESS)
-	newBlock := Block{
-		BlockHeader: BlockHeader{
-			Timestamp: time.Now().String(),
-			PrevHash:  blockchain.LastHash,
-		},
-		Transactions: append([]*Transaction{coinbaseTransaction}, transactions...),
-	}
-	newBlock.Mine()
-	blockchain.StoreNewBlock(&newBlock)
-	return nil
 }
 
 func (blockchain *BlockChain) GetUTXOs(address string) map[string]TxOutputs {
