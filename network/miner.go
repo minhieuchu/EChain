@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"net"
 	"time"
 )
@@ -39,6 +40,11 @@ func (node *MinerNode) StartP2PNode() {
 		}
 	}()
 
+	go func() {
+		time.Sleep(5 * time.Second)
+		node.startMining()
+	}()
+
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -46,6 +52,51 @@ func (node *MinerNode) StartP2PNode() {
 		}
 
 		go node.handleConnection(conn)
+	}
+}
+
+func (node *MinerNode) mineBlock(newBlock *blockchain.Block) {
+	nonce := 1
+	for {
+		newBlock.Nonce = nonce
+		hashValue := new(big.Int).SetBytes(newBlock.GetHash())
+
+		if hashValue.Cmp(blockchain.TARGET_HASH) == -1 {
+			newBlock.Nonce = nonce
+			break
+		}
+		nonce++
+	}
+}
+
+func (node *MinerNode) startMining() {
+	for {
+		txnList := []*blockchain.Transaction{}
+		// Simply take all transactions in mempool to new block
+		txnList = append(txnList, node.mempool...)
+
+		coinbaseTxn := blockchain.CoinBaseTransaction(node.recipientAddress)
+		newBlock := blockchain.Block{
+			BlockHeader: blockchain.BlockHeader{
+				Timestamp: time.Now().String(),
+				PrevHash:  node.Blockchain.LastHash,
+			},
+			Transactions: append([]*blockchain.Transaction{coinbaseTxn}, txnList...),
+		}
+		node.mineBlock(&newBlock)
+
+		// Step 1: Update local blockchain
+		node.Blockchain.SetBlock(&newBlock)
+		node.Blockchain.SetLastHash(newBlock.GetHash())
+
+		// Step 2: Relay new block to other full nodes / miner nodes
+		for _, connectedNode := range node.connectedPeers {
+			if connectedNode.NodeType == FULLNODE || connectedNode.NodeType == MINER {
+				node.FullNode.sendBlockdataMessage(connectedNode.Address, NEWBLOCK_FROM_MINER_INDEX, []*blockchain.Block{&newBlock})
+			}
+		}
+
+		time.Sleep(10 * time.Second)
 	}
 }
 
