@@ -3,7 +3,6 @@ package main
 import (
 	"EChain/blockchain"
 	"EChain/network"
-	"EChain/wallet"
 	"fmt"
 	"sync"
 	"testing"
@@ -11,8 +10,6 @@ import (
 )
 
 func TestBlockHeaderHeightSPVNode( t *testing.T) {
-	wallets := wallet.LoadWallets()
-	addressList := wallets.GetAddresses()
 	var blockHeaderHeight int
 
 	var wg sync.WaitGroup
@@ -20,7 +17,7 @@ func TestBlockHeaderHeightSPVNode( t *testing.T) {
 		wg.Add(1)
 		portNumber := 8333 + i
 		go func() {
-			fullnode := network.NewFullNode("localhost:"+fmt.Sprint(portNumber), addressList[0])
+			fullnode := network.NewFullNode("localhost:"+fmt.Sprint(portNumber))
 			for i := 0; i < FULLNODE_BLOCK_NUM; i++ {
 				var block blockchain.Block
 				lastHash, _ := fullnode.Blockchain.DataBase.Get([]byte(blockchain.LAST_HASH_STOGAGE_KEY), nil)

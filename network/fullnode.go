@@ -24,8 +24,8 @@ type FullNode struct {
 	getdataMessageCount        int
 }
 
-func NewFullNode(networkAddress, walletAddress string) *FullNode {
-	localBlockchain := blockchain.InitBlockChain(networkAddress, walletAddress)
+func NewFullNode(networkAddress string) *FullNode {
+	localBlockchain := blockchain.InitBlockChain(networkAddress)
 	p2pNode := P2PNode{
 		Version:        1,
 		NetworkAddress: networkAddress,
@@ -379,7 +379,7 @@ func (node *FullNode) handeGetUTXOMsg(conn net.Conn, msg []byte) {
 	conn.Close()
 }
 
-func (node *FullNode) handleNewTxnMsg(msg []byte) {
+func (node *FullNode) handleNewTxnMsg(msg []byte) error {
 	utxoSet := node.Blockchain.UTXOSet()
 	totalInputAmount := 0
 	var newTransaction blockchain.Transaction
@@ -390,15 +390,13 @@ func (node *FullNode) handleNewTxnMsg(msg []byte) {
 	for _, txnInput := range newTransaction.Inputs {
 		referencedTxOutput := utxoSet.GetTxOutputFromTxInput(&txnInput)
 		if referencedTxOutput == nil {
-			fmt.Println("Transaction input references UTXO that does not exist")
-			return
+			return fmt.Errorf("transaction input references UTXO that does not exist")
 		}
 		signature := txnInput.ScriptSig.Signature
 		pubkey := txnInput.ScriptSig.PubKey
 
 		if !bytes.Equal(getPubkeyHashFromPubkey(pubkey), referencedTxOutput.ScriptPubKey.PubKeyHash) {
-			fmt.Println("invalid public key in transaction input")
-			return
+			return fmt.Errorf("invalid public key in transaction input")
 		}
 
 		signatureLength := len(signature)
@@ -406,8 +404,7 @@ func (node *FullNode) handleNewTxnMsg(msg []byte) {
 		s := new(big.Int).SetBytes(signature[(signatureLength / 2):])
 		ecdsaPubkey := getECDSAPubkeyFromUncompressedPubkey(pubkey)
 		if !ecdsa.Verify(&ecdsaPubkey, txnInput.Hash(), r, s) {
-			fmt.Println("invalid signature")
-			return
+			return fmt.Errorf("invalid signature")
 		}
 
 		totalInputAmount += referencedTxOutput.Value
@@ -419,8 +416,7 @@ func (node *FullNode) handleNewTxnMsg(msg []byte) {
 		spentAmount += txOutput.Value
 	}
 	if totalInputAmount < spentAmount {
-		fmt.Println("spent output exceeds input amount")
-		return
+		return fmt.Errorf("spent output exceeds input amount")
 	}
 
 	// Step 3: Replay transaction to network
@@ -430,6 +426,8 @@ func (node *FullNode) handleNewTxnMsg(msg []byte) {
 			node.sendNewTxnMessage(connectedNode.Address, &NewTxnMessage{newTransaction})
 		}
 	}
+
+	return nil
 }
 
 func (node *FullNode) handleFilterloadMsg(msg []byte) {
