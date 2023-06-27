@@ -5,11 +5,6 @@ import (
 	"os"
 )
 
-const (
-	NETWORK_NODES_NUM  = 1
-	FULLNODE_BLOCK_NUM = 50
-)
-
 func main() {
 	networkAddress := os.Args[1]
 	nodeType := os.Args[2]

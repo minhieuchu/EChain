@@ -1,28 +1,33 @@
-package main
+package network
 
 import (
 	"EChain/blockchain"
-	"EChain/network"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
 )
 
-func TestBlockHeaderHeightSPVNode( t *testing.T) {
+const (
+	NETWORK_NODES_NUM  = 1
+	FULLNODE_BLOCK_NUM = 50
+)
+
+func TestBlockHeaderHeightSPVNode(t *testing.T) {
 	var blockHeaderHeight int
+	minerNode := NewMinerNode("", "")
 
 	var wg sync.WaitGroup
 	for i := 0; i < NETWORK_NODES_NUM; i++ {
 		wg.Add(1)
 		portNumber := 8333 + i
 		go func() {
-			fullnode := network.NewFullNode("localhost:"+fmt.Sprint(portNumber))
+			fullnode := NewFullNode("localhost:" + fmt.Sprint(portNumber))
 			for i := 0; i < FULLNODE_BLOCK_NUM; i++ {
 				var block blockchain.Block
 				lastHash, _ := fullnode.Blockchain.DataBase.Get([]byte(blockchain.LAST_HASH_STOGAGE_KEY), nil)
 				block.PrevHash = lastHash
-				block.Mine()
+				minerNode.mineBlock(&block)
 				fullnode.Blockchain.StoreNewBlock(&block)
 			}
 			go func() {
@@ -35,7 +40,7 @@ func TestBlockHeaderHeightSPVNode( t *testing.T) {
 	go func() {
 		time.Sleep(3 * time.Second) // Wait for fullnode to finish building blocks (including mining time for each block)
 		wg.Add(1)
-		spvNode := network.NewSPVNode("localhost:8888")
+		spvNode := NewSPVNode("localhost:8888")
 		go func() {
 			time.Sleep(3 * time.Second)
 			blockHeaderHeight = spvNode.GetHeaderHeight()
@@ -45,7 +50,7 @@ func TestBlockHeaderHeightSPVNode( t *testing.T) {
 	}()
 	wg.Wait()
 
-	if blockHeaderHeight != FULLNODE_BLOCK_NUM + 1 {
-		t.Fatalf("Expected SPV header's length to be %d", FULLNODE_BLOCK_NUM + 1)
+	if blockHeaderHeight != FULLNODE_BLOCK_NUM+1 {
+		t.Fatalf("Expected SPV header's length to be %d", FULLNODE_BLOCK_NUM+1)
 	}
 }

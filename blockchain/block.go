@@ -3,7 +3,6 @@ package blockchain
 import (
 	"bytes"
 	"encoding/gob"
-	"math/big"
 	"os"
 	"time"
 
@@ -22,20 +21,6 @@ type Block struct {
 	Transactions []*Transaction
 }
 
-func (block *Block) Mine() {
-	nonce := 1
-	for {
-		block.Nonce = nonce
-		hashValue := new(big.Int).SetBytes(block.GetHash())
-
-		if hashValue.Cmp(TARGET_HASH) == -1 {
-			block.Nonce = nonce
-			break
-		}
-		nonce++
-	}
-}
-
 func (blockHeader *BlockHeader) GetHash() []byte {
 	return getDoubleSHA256(serialize(blockHeader))
 }
@@ -48,7 +33,7 @@ func (block *Block) GetHash() []byte {
 }
 
 func GenerateGenesisBlock() *Block {
-	err := godotenv.Load()
+	err := godotenv.Load("../.env")
 	handleErr(err)
 
 	satoshiAddress := os.Getenv("SATOSHI_ADDRESS")
@@ -65,10 +50,10 @@ func GenerateGenesisBlock() *Block {
 		BlockHeader: BlockHeader{
 			Timestamp: genesisBlockDate.String(),
 			PrevHash:  []byte{},
+			Nonce:     4436,
 		},
 		Transactions: []*Transaction{&coinbaseTransaction},
 	}
-	block.Mine()
 	return &block
 }
 
