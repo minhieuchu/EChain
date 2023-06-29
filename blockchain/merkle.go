@@ -16,6 +16,9 @@ func (block *Block) SetMerkleRoot() {
 	}
 
 	for {
+		if len(currentHashList) == 0 {
+			return
+		}
 		if len(currentHashList) == 1 {
 			block.MerkleRoot = currentHashList[0]
 			break
