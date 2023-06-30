@@ -42,7 +42,10 @@ func (node *MinerNode) StartP2PNode() {
 
 	go func() {
 		time.Sleep(5 * time.Second)
-		node.startMining()
+		for {
+			node.startMining()
+			time.Sleep(10 * time.Second)
+		}
 	}()
 
 	for {
@@ -78,32 +81,28 @@ func (node *MinerNode) mineBlock(newBlock *blockchain.Block) {
 }
 
 func (node *MinerNode) startMining() {
-	for {
-		txnList := []*blockchain.Transaction{}
-		// Simply take all transactions in mempool to new block
-		txnList = append(txnList, node.mempool...)
+	txnList := []*blockchain.Transaction{}
+	// Simply take all transactions in mempool to new block
+	txnList = append(txnList, node.mempool...)
 
-		coinbaseTxn := blockchain.CoinBaseTransaction(node.recipientAddress)
-		newBlock := blockchain.Block{
-			BlockHeader: blockchain.BlockHeader{
-				Timestamp: time.Now().String(),
-				PrevHash:  node.Blockchain.LastHash,
-			},
-			Transactions: append([]*blockchain.Transaction{coinbaseTxn}, txnList...),
+	coinbaseTxn := blockchain.CoinBaseTransaction(node.recipientAddress)
+	newBlock := blockchain.Block{
+		BlockHeader: blockchain.BlockHeader{
+			Timestamp: time.Now().String(),
+			PrevHash:  node.Blockchain.LastHash,
+		},
+		Transactions: append([]*blockchain.Transaction{coinbaseTxn}, txnList...),
+	}
+	node.mineBlock(&newBlock)
+
+	// Step 1: Update local blockchain & UTXO set
+	node.storeNewBlock(&newBlock)
+
+	// Step 2: Relay new block to other full nodes / miner nodes
+	for _, connectedNode := range node.connectedPeers {
+		if connectedNode.NodeType == FULLNODE || connectedNode.NodeType == MINER {
+			node.FullNode.sendBlockdataMessage(connectedNode.Address, NEWBLOCK_FROM_MINER_INDEX, []*blockchain.Block{&newBlock})
 		}
-		node.mineBlock(&newBlock)
-
-		// Step 1: Update local blockchain & UTXO set
-		node.storeNewBlock(&newBlock)
-
-		// Step 2: Relay new block to other full nodes / miner nodes
-		for _, connectedNode := range node.connectedPeers {
-			if connectedNode.NodeType == FULLNODE || connectedNode.NodeType == MINER {
-				node.FullNode.sendBlockdataMessage(connectedNode.Address, NEWBLOCK_FROM_MINER_INDEX, []*blockchain.Block{&newBlock})
-			}
-		}
-
-		time.Sleep(10 * time.Second)
 	}
 }
 

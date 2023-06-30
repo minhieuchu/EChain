@@ -50,7 +50,7 @@ func TestBlockHeaderHeightSPVNode(t *testing.T) {
 	}()
 	wg.Wait()
 
-	if blockHeaderHeight != FULLNODE_BLOCK_NUM+1 {
+	if blockHeaderHeight != FULLNODE_BLOCK_NUM+1 { // +1 is for Genesis block
 		t.Fatalf("Expected SPV header's length to be %d", FULLNODE_BLOCK_NUM+1)
 	}
 }
