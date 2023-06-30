@@ -31,8 +31,9 @@ func NewFullNode(networkAddress string) *FullNode {
 		NetworkAddress: networkAddress,
 	}
 	return &FullNode{
-		P2PNode:    p2pNode,
-		Blockchain: localBlockchain,
+		P2PNode:                    p2pNode,
+		Blockchain:                 localBlockchain,
+		connectedSpvBloomFilterMap: make(map[string][]string),
 	}
 }
 

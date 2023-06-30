@@ -36,9 +36,10 @@ func NewSPVNode(networkAddress string) *SPVNode {
 		NetworkAddress: networkAddress,
 	}
 	return &SPVNode{
-		P2PNode:          p2pNode,
-		blockchainHeader: localBlockchainHeader,
-		utxoSet:          &utxoSet,
+		P2PNode:            p2pNode,
+		blockchainHeader:   localBlockchainHeader,
+		utxoSet:            &utxoSet,
+		updatedBlockHeader: make(chan bool),
 	}
 }
 
@@ -118,31 +119,14 @@ func (node *SPVNode) handleMerkleblockMsg(msg []byte) {
 	if !node.blockchainHeader.CheckHeaderExistence(&blockHeader) {
 		time.Sleep(3 * time.Second) // Optionally wait for other fullnodes to receive and verify new block
 		for _, connectedNode := range node.connectedPeers {
-			if connectedNode.NodeType == FULLNODE && connectedNode.Address != merkleblockMsg.AddrFrom {
+			if (connectedNode.NodeType == FULLNODE || connectedNode.NodeType == MINER) && connectedNode.Address != merkleblockMsg.AddrFrom {
 				node.requestingBlockHeader = true
 				go func(targetAddress string) {
 					node.sendGetheadersMsg(targetAddress)
 				}(connectedNode.Address)
 			}
 		}
-		timeCounter := 0
-		isBlockHeaderUpdated := false
-		for {
-			select {
-			case <-node.updatedBlockHeader:
-				isBlockHeaderUpdated = true
-			default:
-			}
-			time.Sleep(200 * time.Millisecond)
-			timeCounter++
-			if timeCounter > 10 {
-				break
-			}
-		}
-		node.requestingBlockHeader = false
-		if !isBlockHeaderUpdated {
-			return
-		}
+		<-node.updatedBlockHeader
 	}
 	// Step 2: Verify transaction with Merkle proof
 	if !node.blockchainHeader.CheckHeaderExistence(&blockHeader) {

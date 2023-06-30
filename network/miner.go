@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"net"
 	"time"
+
+	"golang.org/x/exp/slices"
 )
 
 type MinerNode struct {
@@ -106,6 +108,25 @@ func (node *MinerNode) startMining() {
 	}
 }
 
+func (node *MinerNode) sendVerackMsg(toAddress string) {
+	fmt.Println("Send Verack msg from", node.NetworkAddress, "to", toAddress)
+	verackMsg := VerackMessage{MINER, node.NetworkAddress}
+	sentData := append(msgTypeToBytes(VERACK_MSG), serialize(verackMsg)...)
+	sendMessage(toAddress, sentData)
+}
+
+func (node *MinerNode) handleVersionMsg(msg []byte) {
+	var versionMsg VersionMessage
+	genericDeserialize(msg, &versionMsg)
+
+	if node.Version == versionMsg.Version {
+		node.sendVerackMsg(versionMsg.AddrMe)
+		if !slices.Contains(node.getConnectedNodeAddresses(), versionMsg.AddrMe) {
+			node.sendVersionMsg(versionMsg.AddrMe)
+		}
+	}
+}
+
 func (node *MinerNode) handleNewTxnMsg(msg []byte) {
 	var newTransaction blockchain.Transaction
 	genericDeserialize(msg, &newTransaction)
@@ -127,7 +148,7 @@ func (node *MinerNode) handleConnection(conn net.Conn) {
 
 	switch msgType {
 	case VERSION_MSG:
-		node.FullNode.handleVersionMsg(payload)
+		node.handleVersionMsg(payload)
 	case VERACK_MSG:
 		node.FullNode.handleVerackMsg(payload)
 	case ADDR_MSG:

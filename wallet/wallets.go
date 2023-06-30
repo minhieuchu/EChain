@@ -25,6 +25,13 @@ type Wallets struct {
 	wallets        map[string]Wallet
 }
 
+func NewWallets() Wallets {
+	return Wallets{
+		connectedNodes: []network.NodeInfo{},
+		wallets:        make(map[string]Wallet),
+	}
+}
+
 func (wallets *Wallets) ConnectNode(nodeType, address string) {
 	wallets.connectedNodes = append(wallets.connectedNodes, network.NodeInfo{NodeType: nodeType, Address: address})
 }
