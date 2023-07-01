@@ -21,6 +21,7 @@ const (
 	versionByte           = byte(0) // prefixed to pubkey hash when calculating address
 	COINBASE_REWARD       = 1000    // satoshi
 	LAST_HASH_STOGAGE_KEY = "LAST_HASH"
+	SATOSHI_ADDRESS		  = "1G78MhhtATZoRZ69qhNNqeSJ2LY1NjQQSV"
 )
 
 var TARGET_HASH = new(big.Int).Lsh(big.NewInt(1), hashValueLength-difficultyLevel)

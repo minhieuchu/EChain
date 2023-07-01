@@ -3,10 +3,7 @@ package blockchain
 import (
 	"bytes"
 	"encoding/gob"
-	"os"
 	"time"
-
-	"github.com/joho/godotenv"
 )
 
 type BlockHeader struct {
@@ -33,12 +30,8 @@ func (block *Block) GetHash() []byte {
 }
 
 func GenerateGenesisBlock() *Block {
-	err := godotenv.Load("../.env")
-	handleErr(err)
-
-	satoshiAddress := os.Getenv("SATOSHI_ADDRESS")
 	genesisBlockDate, _ := time.Parse("2006-Jan-02", "2009-Jan-03")
-	txOutput := createTxnOutput(COINBASE_REWARD, satoshiAddress)
+	txOutput := createTxnOutput(COINBASE_REWARD, SATOSHI_ADDRESS)
 	coinbaseTransaction := Transaction{
 		Inputs:   []TxInput{},
 		Outputs:  []TxOutput{txOutput},
