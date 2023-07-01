@@ -28,7 +28,7 @@ func setup() (*Wallets, string, string) {
 	time.Sleep(2 * time.Second) // Wait for 3 nodes to finish connecting / synchronizing data
 	wallets.AddWalletAddrToSPVNodes(walletAddr1)
 
-	time.Sleep(7 * time.Second) // Wait for miner node to finish mining the first block
+	time.Sleep(7 * time.Second) // Wait for miner node to finish mining the first block after the Genesis block
 
 	return &wallets, walletAddr1, walletAddr2
 }
@@ -44,11 +44,15 @@ func TestGetBalance(t *testing.T) {
 func TestTransfer(t *testing.T) {
 	wallets, walletAddr1, walletAddr2 := setup()
 	wallets.Transfer(walletAddr1, walletAddr2, 500)
-	time.Sleep(time.Second) // Wait for new transaction to be propagated to SPV node
-	firstWalletBalance := wallets.GetBalance(walletAddr1)
-	secondWalletBalance := wallets.GetBalance(walletAddr2)
+	// Wait for new transaction to be propagated to SPV node
+	time.Sleep(time.Second)
+	// Wait for miner node to pick new transaction from mempool and start mining
+	// Miner nodes create new block every 10 seconds
+	time.Sleep(10 * time.Second)
+	minerWalletBalance := wallets.GetBalance(walletAddr1)
+	receiverWalletBalance := wallets.GetBalance(walletAddr2)
 
-	if firstWalletBalance != blockchain.COINBASE_REWARD-500 || secondWalletBalance != 500 {
-		t.Fatalf("Expected wallet balances to be %d and %d, actual: %d and %d", blockchain.COINBASE_REWARD-500, 500, firstWalletBalance, secondWalletBalance)
+	if minerWalletBalance != blockchain.COINBASE_REWARD-500 || receiverWalletBalance != 500 {
+		t.Fatalf("Expected wallet balances to be %d and %d, actual: %d and %d", blockchain.COINBASE_REWARD-500, 500, minerWalletBalance, receiverWalletBalance)
 	}
 }

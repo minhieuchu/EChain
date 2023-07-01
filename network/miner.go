@@ -14,7 +14,6 @@ import (
 
 type MinerNode struct {
 	FullNode
-	mempool          []*blockchain.Transaction
 	recipientAddress string // Address to receive block reward after mining new blocks
 }
 
@@ -58,14 +57,6 @@ func (node *MinerNode) StartP2PNode() {
 
 		go node.handleConnection(conn)
 	}
-}
-
-func (node *MinerNode) storeNewBlock(newBlock *blockchain.Block) {
-	node.Blockchain.SetBlock(newBlock)
-	node.Blockchain.SetLastHash(newBlock.GetHash())
-
-	utxoSet := node.Blockchain.UTXOSet()
-	utxoSet.UpdateWithNewBlock(newBlock)
 }
 
 func (node *MinerNode) mineBlock(newBlock *blockchain.Block) {
@@ -127,17 +118,6 @@ func (node *MinerNode) handleVersionMsg(msg []byte) {
 	}
 }
 
-func (node *MinerNode) handleNewTxnMsg(msg []byte) {
-	var newTransaction blockchain.Transaction
-	genericDeserialize(msg, &newTransaction)
-
-	err := node.FullNode.handleNewTxnMsg(msg)
-	if err != nil {
-		return
-	}
-	node.mempool = append(node.mempool, &newTransaction)
-}
-
 func (node *MinerNode) handleConnection(conn net.Conn) {
 	data, err := io.ReadAll(conn)
 	defer conn.Close()
@@ -166,7 +146,7 @@ func (node *MinerNode) handleConnection(conn net.Conn) {
 	case GETUTXO_MSG:
 		node.FullNode.handeGetUTXOMsg(conn, payload)
 	case NEWTXN_MSG:
-		node.handleNewTxnMsg(payload)
+		node.FullNode.handleNewTxnMsg(payload)
 	default:
 		fmt.Println("invalid message")
 	}

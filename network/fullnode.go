@@ -22,6 +22,7 @@ type FullNode struct {
 	Blockchain                 *blockchain.BlockChain
 	connectedSpvBloomFilterMap map[string][]string
 	getdataMessageCount        int
+	mempool                    []*blockchain.Transaction
 }
 
 func NewFullNode(networkAddress string) *FullNode {
@@ -277,6 +278,14 @@ func (node *FullNode) verifyBlock(newBlock *blockchain.Block) bool {
 	return true
 }
 
+func (node *FullNode) storeNewBlock(newBlock *blockchain.Block) {
+	node.Blockchain.SetBlock(newBlock)
+	node.Blockchain.SetLastHash(newBlock.GetHash())
+
+	utxoSet := node.Blockchain.UTXOSet()
+	utxoSet.UpdateWithNewBlock(newBlock)
+}
+
 func (node *FullNode) handleBlockdataMsg(msg []byte) {
 	var blockdataMsg BlockdataMessage
 	genericDeserialize(msg, &blockdataMsg)
@@ -291,8 +300,7 @@ func (node *FullNode) handleBlockdataMsg(msg []byte) {
 		}
 
 		// Step 2: Store new block to local blockchain
-		node.Blockchain.SetBlock(newBlock)
-		node.Blockchain.SetLastHash(newBlock.GetHash())
+		node.storeNewBlock(newBlock)
 
 		// Step 3: Relay new block to other full nodes
 		for _, connectedNode := range node.connectedPeers {
@@ -386,6 +394,12 @@ func (node *FullNode) handleNewTxnMsg(msg []byte) error {
 	var newTransaction blockchain.Transaction
 	genericDeserialize(msg, &newTransaction)
 
+	for _, txn := range node.mempool {
+		if slices.Equal(txn.Hash, newTransaction.Hash) {
+			return nil
+		}
+	}
+
 	// Step 1: Check if transaction inputs reference valid UTXOs &
 	// check if input signature works with output's locking script
 	for _, txnInput := range newTransaction.Inputs {
@@ -420,8 +434,8 @@ func (node *FullNode) handleNewTxnMsg(msg []byte) error {
 		return fmt.Errorf("spent output exceeds input amount")
 	}
 
-	// Step 3: Replay transaction to network
-	// Todo: Add to current node's mempool
+	// Step 3: Add to current node's mempool & Replay transaction to network
+	node.mempool = append(node.mempool, &newTransaction)
 	for _, connectedNode := range node.connectedPeers {
 		if connectedNode.NodeType == FULLNODE || connectedNode.NodeType == MINER {
 			node.sendNewTxnMessage(connectedNode.Address, &NewTxnMessage{newTransaction})
