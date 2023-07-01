@@ -268,6 +268,16 @@ func (node *SPVNode) handeGetUTXOMsg(conn net.Conn, msg []byte) {
 	conn.Close()
 }
 
+func (node *SPVNode) handleNewTxnMsg(msg []byte) {
+	for _, connectedNode := range node.connectedPeers {
+		if connectedNode.NodeType == MINER || connectedNode.NodeType == FULLNODE {
+			fmt.Println("Send NewTxn msg from", node.NetworkAddress, "to", connectedNode.Address)
+			sentData :=  append(msgTypeToBytes(NEWTXN_MSG), msg...)
+			sendMessage(connectedNode.Address, sentData)
+		}
+	}
+}
+
 func (node *SPVNode) updateBloomFilter() {
 	// Todo: Implement a realistic bloom filter
 	node.bloomFilter = node.monitorAddrList
@@ -301,6 +311,8 @@ func (node *SPVNode) handleConnection(conn net.Conn) {
 		node.handleMerkleblockMsg(payload)
 	case GETUTXO_MSG:
 		node.handeGetUTXOMsg(conn, payload)
+	case NEWTXN_MSG:
+		node.handleNewTxnMsg(payload)
 	default:
 		fmt.Println("invalid message")
 	}
