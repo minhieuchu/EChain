@@ -37,22 +37,6 @@ func NewFullNode(networkAddress string) *FullNode {
 	}
 }
 
-// ======= Send messages =======
-
-func (node *FullNode) sendAddrMsg(toAddress string) {
-	fmt.Println("Send Addr msg from", node.NetworkAddress, "to", toAddress)
-	addrMsg := AddrMessage{node.NetworkAddress}
-	sentData := append(msgTypeToBytes(ADDR_MSG), serialize(addrMsg)...)
-	sendMessage(toAddress, sentData)
-}
-
-func (node *FullNode) sendVerackMsg(toAddress string) {
-	fmt.Println("Send Verack msg from", node.NetworkAddress, "to", toAddress)
-	verackMsg := VerackMessage{FULLNODE, node.NetworkAddress}
-	sentData := append(msgTypeToBytes(VERACK_MSG), serialize(verackMsg)...)
-	sendMessage(toAddress, sentData)
-}
-
 func (node *FullNode) StartP2PNode() {
 	fmt.Println(" ===== Starting blockchain node at", node.NetworkAddress, "=====")
 	ln, err := net.Listen(protocol, node.NetworkAddress)
@@ -77,6 +61,22 @@ func (node *FullNode) StartP2PNode() {
 
 		go node.handleConnection(conn)
 	}
+}
+
+// ======= Send messages =======
+
+func (node *FullNode) sendAddrMsg(toAddress string) {
+	fmt.Println("Send Addr msg from", node.NetworkAddress, "to", toAddress)
+	addrMsg := AddrMessage{node.NetworkAddress}
+	sentData := append(msgTypeToBytes(ADDR_MSG), serialize(addrMsg)...)
+	sendMessage(toAddress, sentData)
+}
+
+func (node *FullNode) sendVerackMsg(toAddress string) {
+	fmt.Println("Send Verack msg from", node.NetworkAddress, "to", toAddress)
+	verackMsg := VerackMessage{FULLNODE, node.NetworkAddress}
+	sentData := append(msgTypeToBytes(VERACK_MSG), serialize(verackMsg)...)
+	sendMessage(toAddress, sentData)
 }
 
 func (node *FullNode) sendGetBlocksMsg(toAddress string) {

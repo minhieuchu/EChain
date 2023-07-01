@@ -7,14 +7,15 @@ import (
 	"time"
 )
 
-func TestGetBalance(t *testing.T) {
+func setup() (*Wallets, string, string) {
 	wallets := NewWallets()
-	walletAddr := wallets.AddNewWallet()
+	walletAddr1 := wallets.AddNewWallet()
+	walletAddr2 := wallets.AddNewWallet()
 	minerAddr := "localhost:8333"
 	fullnodeAddr := "localhost:8334"
 	spvAddr := "localhost:8335"
 
-	minerNode := network.NewMinerNode(minerAddr, walletAddr)
+	minerNode := network.NewMinerNode(minerAddr, walletAddr1)
 	go minerNode.StartP2PNode()
 
 	fullNode := network.NewFullNode(fullnodeAddr)
@@ -25,11 +26,29 @@ func TestGetBalance(t *testing.T) {
 
 	wallets.ConnectNode(network.SPV, spvAddr)
 	time.Sleep(2 * time.Second) // Wait for 3 nodes to finish connecting / synchronizing data
-	wallets.AddWalletAddrToSPVNodes(walletAddr)
+	wallets.AddWalletAddrToSPVNodes(walletAddr1)
 
-	time.Sleep(7 * time.Second)
+	time.Sleep(7 * time.Second) // Wait for miner node to finish mining the first block
+
+	return &wallets, walletAddr1, walletAddr2
+}
+
+func TestGetBalance(t *testing.T) {
+	wallets, walletAddr, _ := setup()
 	balance := wallets.GetBalance(walletAddr)
 	if balance != blockchain.COINBASE_REWARD {
 		t.Fatalf("Expected balance to be %d , actual: %d", blockchain.COINBASE_REWARD, balance)
+	}
+}
+
+func TestTransfer(t *testing.T) {
+	wallets, walletAddr1, walletAddr2 := setup()
+	wallets.Transfer(walletAddr1, walletAddr2, 500)
+	time.Sleep(time.Second) // Wait for new transaction to be propagated to SPV node
+	firstWalletBalance := wallets.GetBalance(walletAddr1)
+	secondWalletBalance := wallets.GetBalance(walletAddr2)
+
+	if firstWalletBalance != blockchain.COINBASE_REWARD-500 || secondWalletBalance != 500 {
+		t.Fatalf("Expected wallet balances to be %d and %d, actual: %d and %d", blockchain.COINBASE_REWARD-500, 500, firstWalletBalance, secondWalletBalance)
 	}
 }
